@@ -37,14 +37,15 @@ def _parse_gps_data(gpsdata):
 def _get_pts_from_hdf5(depth, color, gps, seg=None, front=True, voxel=0.03):
 
     x, y, dire, ht = gps
+
+    # depth情報とrgbから点群を作る
+    # segは緑の部分が1、それ以外が0の配列
+    # 掛け算をすることで緑以外の部分は0となり、点群を生成する際に無視される
     if seg is None:
         depth = o3d.geometry.Image(depth)
     else:
-        # segは緑の部分が1、それ以外が0の配列
-        # 掛け算をすることで緑以外の部分は0となり、点群を生成する際に無視される
         depth = o3d.geometry.Image(depth * seg)
     color = o3d.geometry.Image(color_frame)
-    # depth情報とrgbから点群を作る
     rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
         color, depth, depth_trunc=5, convert_rgb_to_intensity=False, depth_scale=1000
     )
@@ -136,12 +137,9 @@ if __name__ == "__main__":
                     points.append(point)
                     colors.append(color)
 
-        # 8.49
-        t = time()
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(np.concatenate(points, axis=0))
         pcd.colors = o3d.utility.Vector3dVector(np.concatenate(colors, axis=0))
-        print(time()-t)
 
         # # Create DBSCAN algorithm.
         # dbscan_instance = dbscan(down_all, 0.3, 3)
@@ -182,5 +180,4 @@ if __name__ == "__main__":
         # for i, v in enumerate(vis):
         #     o3d.io.write_point_cloud(f"./recap/{i}.pts", v)
 
-        #9.27
         o3d.io.write_point_cloud("./test.pts", pcd)
