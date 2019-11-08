@@ -1,0 +1,5 @@
+data/
+.venv/
+recap/
+__pycache__/
+*.pts
