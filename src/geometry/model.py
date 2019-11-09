@@ -10,10 +10,10 @@ from six.moves import urllib
 
 import numpy as np
 
-import tensorflow as tf
-
 
 def create_model():
+    import tensorflow as tf
+
     class DeepLabModel(object):
         """Class to load deeplab model and run inference."""
 
