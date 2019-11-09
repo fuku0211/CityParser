@@ -16,8 +16,7 @@ from geometry.capture import RealsenseCapture
 from utils.tool import array_to_3dim
 
 
-# ストリーム
-def stream_realsense():
+def stream_realsense(args):
     cap = RealsenseCapture()
     cap.start()
     while True:
@@ -43,14 +42,13 @@ def stream_realsense():
             exit()
 
 
-# 録画した動画を再生する
-def play_record(site, date):
-    color_path = Path("data", "hdf5", site, "color.hdf5")
-    depth_path = Path("data", "hdf5", site, "depth.hdf5")
+def replay_movie(args):
+    color_path = Path("data", "hdf5", args.site, "color.hdf5")
+    depth_path = Path("data", "hdf5", args.site, "depth.hdf5")
 
     with h5py.File(str(color_path), "a") as fc, h5py.File(str(depth_path), "a") as fd:
-        color_group = fc[date]
-        depth_group = fd[date]
+        color_group = fc[args.date]
+        depth_group = fd[args.date]
 
         for i in range(len(color_group)):
             # ベクトル化したデータをもとの配列の形に戻す
@@ -86,12 +84,65 @@ def play_record(site, date):
                 exit()
 
 
+def record_realsense_with_gps(args):
+    global gps_data
+    global gps_frag
+    with serial.Serial("COM6", 230400) as ser:  # GPSのポート指定
+        # 録画と並行してgpsの情報取得をする
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        executor.submit(_extract_gps_data, ser)
+
+        site_path = Path("data", "hdf5", args.site)
+        color_path = site_path / Path("color.hdf5")
+        depth_path = site_path / Path("depth.hdf5")
+        gps_path = site_path / Path("gps.hdf5")
+
+        t_record = time()
+        t_now = datetime.datetime.now()
+        cap = RealsenseCapture()
+        cap.start()
+
+        with ExitStack() as stack:
+            # 保存するデータに対応するhdf5ファイルを開く
+            fc = stack.enter_context(h5py.File(str(color_path), "a"))
+            fd = stack.enter_context(h5py.File(str(depth_path), "a"))
+            fg = stack.enter_context(h5py.File(str(gps_path), "a"))
+
+            color_group = fc.create_group(_create_zfill_time(t_now))
+            depth_group = fd.create_group(_create_zfill_time(t_now))
+            gps_group = fg.create_group(_create_zfill_time(t_now))
+
+            try:
+                # 各フレームを保存する
+                frame = 0
+                while True:
+                    if gps_data is not None:
+                        sleep(0.2)  # これを挟まないと処理速度が足りずgpsの時間がずれていく
+                        frames = cap.read()
+                        print(itemgetter(1, 3, 5)(gps_data))
+                        gps_group.create_dataset(
+                            str(frame), data=gps_data, compression="gzip"
+                        )
+                        color_group.create_dataset(
+                            str(frame), data=frames[0].ravel(), compression="gzip"
+                        )
+                        depth_group.create_dataset(
+                            str(frame), data=frames[1].ravel(), compression="gzip"
+                        )
+                        frame += 1
+
+            # # ctrl+c でKeyboardInterruptを呼べるのを利用して終了時の動作を指定する
+            except KeyboardInterrupt:
+                print("record time : {}".format(str(time() - t_record)))
+                gps_frag = False
+                executor.shutdown(False)
+                exit()
+
+
 def _extract_gps_data(ser):
     global gps_data
     global gps_frag
-
     frag_rmc, frag_vtg, frag_gga = [False, False, False]
-    i = 0
     while gps_frag:
         log = ser.readline()
         if b"$GNRMC" in log:
@@ -112,14 +163,11 @@ def _extract_gps_data(ser):
             else:
                 return data
 
+        # 3種類のデータが取得できたらglobalのgps_dataを更新し、ループに戻る
         if all([frag_rmc, frag_vtg, frag_gga]):
-            result = rmc + vtg + gga
-            result = list(map(_fill_empty, result))
+            result = list(map(_fill_empty, rmc + vtg + gga))
             gps_data = np.array(result, dtype=h5py.special_dtype(vlen=str))
-            # print(f"raw : {gps_data}")
             frag_rmc, frag_vtg, frag_gga = [False, False, False]
-
-            i += 1
 
 
 def _create_zfill_time(time_now):
@@ -147,79 +195,24 @@ def _create_zfill_time(time_now):
 if __name__ == "__main__":
     # コマンドライン用
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "mode",
-        choices=["stream", "record", "play"],
-        default="stream",
-        help="execution mode",
-    )
-    parser.add_argument("--site")
-    parser.add_argument("--date")
+    subparsers = parser.add_subparsers()
+
+    # 各コマンドの設定
+    stream_parser = subparsers.add_parser("stream")
+    stream_parser.set_defaults(handler=stream_realsense)
+
+    record_parser = subparsers.add_parser("record")
+    record_parser.add_argument("-s", "--site", required=True)
+    record_parser.set_defaults(handler=record_realsense_with_gps)
+
+    replay_parser = subparsers.add_parser("replay")
+    replay_parser.add_argument("-s", "--site", required=True)
+    replay_parser.add_argument("-d", "--date", required=True)
+    replay_parser.set_defaults(handler=replay_movie)
+
     args = parser.parse_args()
-
-    # ストリーム再生
-    if args.mode == "stream":
-        stream_realsense()
-
-    # 録画を再生
-    elif args.mode == "play":
-        play_record(args.site, args.date)
-
-    # 録画
     gps_data = None
-    gps_frag = True
-    if args.mode == "record":
-        with serial.Serial("COM6", 230400) as ser:  # GPSのポート指定
-            # 録画と並行してgpsの情報取得をする
-            executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
-            executor.submit(_extract_gps_data, ser)
+    gps_frag = True  # Trueの間はgpsを取得する
 
-            site_path = Path("data", "hdf5", args.site)
-            color_path = site_path / Path("color.hdf5")
-            depth_path = site_path / Path("depth.hdf5")
-            gps_path = site_path / Path("gps.hdf5")
-
-            t_record = time()
-            t_now = datetime.datetime.now()
-            cap = RealsenseCapture()
-            cap.start()
-
-            with ExitStack() as stack:
-                # 保存するデータに対応するhdf5ファイルを開く
-                fc = stack.enter_context(h5py.File(str(color_path), "a"))
-                fd = stack.enter_context(h5py.File(str(depth_path), "a"))
-                fg = stack.enter_context(h5py.File(str(gps_path), "a"))
-
-                color_group = fc.create_group(_create_zfill_time(t_now))
-                depth_group = fd.create_group(_create_zfill_time(t_now))
-                gps_group = fg.create_group(_create_zfill_time(t_now))
-
-                try:
-                    # 各フレームに対する操作
-                    frame = 0
-                    while True:
-                        if gps_data is not None:
-                            # start = time()
-                            sleep(0.2)  # これを挟まないと処理速度が足りずgpsの時間がずれていく
-                            frames = cap.read()
-                            print(itemgetter(1, 3, 5)(gps_data))
-                            gps_group.create_dataset(
-                                str(frame), data=gps_data, compression="gzip"
-                            )
-                            color_group.create_dataset(
-                                str(frame), data=frames[0].ravel(), compression="gzip"
-                            )
-                            depth_group.create_dataset(
-                                str(frame), data=frames[1].ravel(), compression="gzip"
-                            )
-                            frame += 1
-                            if frame == 28800:
-                                raise KeyboardInterrupt
-                            # print(time() - start)
-
-                # # ctrl+c でKeyboardInterruptを呼べるのを利用して終了時の動作を指定する
-                except KeyboardInterrupt:
-                    print("record time : {}".format(str(time() - t_record)))
-                    gps_frag = False
-                    executor.shutdown(False)
-                    exit()
+    if hasattr(args, "handler"):
+        args.handler(args)
