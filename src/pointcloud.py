@@ -80,6 +80,8 @@ def create_pcd(args):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(np.concatenate(points, axis=0))
     pcd.colors = o3d.utility.Vector3dVector(np.concatenate(colors, axis=0))
+    o3d.io.write_point_cloud("./test.pts", pcd)
+
 
 
 def _parse_gps_data(gpsdata):
@@ -191,5 +193,3 @@ if __name__ == "__main__":
         # # o3d.visualization.draw_geometries(vis)
         # for i, v in enumerate(vis):
         #     o3d.io.write_point_cloud(f"./recap/{i}.pts", v)
-
-        o3d.io.write_point_cloud("./test.pts", pcd)
