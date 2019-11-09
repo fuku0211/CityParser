@@ -20,10 +20,7 @@ from pyclustering.cluster.kmeans import kmeans, kmeans_visualizer
 from pyclustering.samples.definitions import FCPS_SAMPLES
 from tqdm import tqdm, trange
 from utils.tool import array_to_3dim, calc_gap_between_yaxis_and_vector, random_colors
-
-# 緯度経度を平面直角座標に変換するためのコード
-transformer = pyproj.Transformer.from_proj(6668, 6677)
-
+from geometry.capture import CameraIntrinsic
 
 def create_pcd(args):
     site_path = Path("data", "hdf5", args.site)
@@ -31,16 +28,6 @@ def create_pcd(args):
     depth_path = site_path / Path("depth.hdf5")
     gps_path = site_path / Path("gps.hdf5")
     seg_path = site_path / Path("seg.hdf5")
-
-    # カメラのパラメータを設定 (解像度、焦点距離、光学中心)
-    pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(
-        1280,
-        720,
-        925.41943359375,
-        924.6876220703125,
-        638.5858764648438,
-        368.45904541015625,
-    )
 
     points = []
     colors = []
@@ -83,7 +70,6 @@ def create_pcd(args):
     o3d.io.write_point_cloud("./test.pts", pcd)
 
 
-
 def _parse_gps_data(gpsdata):
     # TODO: 標高=楕円体高であってるかわからない
     lat, lon, dire, ht = map(float, itemgetter(3, 5, 8, 33)(gpsdata))
@@ -110,7 +96,7 @@ def _create_pcd_from_frame(depth, color, gps, seg=None, front=True, voxel=0.03):
     )
 
     # x軸方向が北として平面座標上に点群を配置する
-    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, CameraIntrinsic().o3d())
     pcd = pcd.voxel_down_sample(voxel_size=voxel)
     colors = np.asarray(pcd.colors)
     pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])  # 上下反転
@@ -135,6 +121,10 @@ def _create_pcd_from_frame(depth, color, gps, seg=None, front=True, voxel=0.03):
 
 
 if __name__ == "__main__":
+    # 緯度経度を平面直角座標に変換するためのコード
+    transformer = pyproj.Transformer.from_proj(6668, 6677)
+
+
     # コマンドライン設定
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
