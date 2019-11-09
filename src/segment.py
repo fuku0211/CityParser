@@ -6,18 +6,10 @@ import cv2
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-
-# コマンドライン用
-parser = argparse.ArgumentParser()
-parser.add_argument("mode", choices=["segment", "play"], help="execution mode")
-parser.add_argument("-s", "--record_start")
-parser.add_argument("-e", "--record_end")
-parser.add_argument("-v", "--view")
-args = parser.parse_args()
-
-# DIR_RECORD = '/content/drive/My Drive/Colab Notebooks/distro_analyzer/out/record'
-#
-DIR_RECORD = "C:/Laboratory/model/distro_analyzer/out/record"
+from geometry.model import create_model, deeplabv3
+from utils.tool import HEIGHT, WIDTH, array_to_3dim, get_gpu_info
+import h5py
+from pprint import pprint
 
 
 def __create_cityscapes_label_colormap():
@@ -76,73 +68,85 @@ def label_to_color_image(label):
     return colormap[label]
 
 
-if args.mode == "segment":
-    from geometry.model import create_model, deeplabv3
-
-    if args.record_start is None or args.record_end is None:
-        raise NoRangeError("specify start and end date")
-
-    # コマンドラインで指定した範囲の録画のパスを取り出す
-    records = list(Path(DIR_RECORD).iterdir())
-    dates = sorted([i.stem for i in records])
-    records = records[
-        dates.index(f"{args.record_start}") : dates.index(f"{args.record_end}") + 1
-    ]
+def inference_from_hdf5(args):
+    site_path = Path("data", "hdf5", args.site)
+    color_path = site_path / Path("color.hdf5")
+    seg_path = site_path / Path("seg.hdf5")
 
     model = create_model()
-    for record in records:
-        print("record : " + record.stem)
-        path_color = Path(record) / Path(record.stem + "_color.npy")
-        npy = np.load(path_color)
-        frames, height, width, _ = npy.shape
+    with h5py.File(str(color_path), "r") as fc, h5py.File(str(seg_path), "a") as fs:
+        for date in tqdm(args.date, desc="all"):
+            color_group = fc[date]
+            if date in fs.keys():
+                del fs[date]
+            seg_group = fs.create_group(date)
 
-        # セグメンテーション結果を格納する配列
-        seg = np.empty((frames, height, width), dtype="uint8")
-        for i in tqdm(range(frames)):
-            # フレームを読み込んでセグメンテーションできるようにリサイズする
-            img = Image.fromarray(npy[i, :, :, :])
-            img = img.resize((2048, 1024))
-            # セグメンテーションして元のサイズに戻す
-            result = deeplabv3(img, model).astype("uint8")
-            result = result == 8
-            result = result * 255
-            result = np.dstack([result, result, result]).astype("uint8")
-            result = Image.fromarray(result).resize((width, height))
-            result = np.asarray(result)
-            tag = result[:, :, 0] + result[:, :, 1] + result[:, :, 2]
-            tree = tag != 0
-            seg[i, :, :] = tree
-        path_seg = Path(record) / Path(record.stem + "_segment.npy")
-        np.save(path_seg, seg)
+            frame_count = len(color_group.keys())
+            for i in tqdm(range(frame_count), desc=f"date : {date}", leave=False):
+                # フレームを読み込んでセグメンテーションできるようにリサイズする
+                img = array_to_3dim(color_group[str(i)])
+                img = Image.fromarray(img)
+                img = img.resize((2048, 1024))
+                # セグメンテーションして元のサイズに戻す
+                result = deeplabv3(img, model).astype("uint8")
+                result = result == 8
+                result = result * 255
+                result = np.dstack([result, result, result]).astype("uint8")
+                result = Image.fromarray(result).resize((WIDTH, HEIGHT))
+                result = np.asarray(result)
+                tag = result[:, :, 0] + result[:, :, 1] + result[:, :, 2]
+                element = tag != 0
+                seg_group.create_dataset(
+                    str(i), data=element.ravel(), compression="gzip"
+                )
 
-if args.mode == "play":
 
-    if args.view is None:
-        raise NoViewFile("segment view file")
+def replay_segment(args):
+    site_path = Path("data", "hdf5", args.site)
+    color_path = site_path / Path("color.hdf5")
+    seg_path = site_path / Path("seg.hdf5")
 
-    path_seg = Path(DIR_RECORD) / Path(args.view) / Path(f"{args.view}_segment.npy")
-    path_org = Path(DIR_RECORD) / Path(args.view) / Path(f"{args.view}_color.npy")
-    seg = np.load(path_seg)
-    org = np.load(path_org)
+    with h5py.File(str(color_path), "r") as fc, h5py.File(str(seg_path), "r") as fs:
+        color_group = fc[args.date]
+        seg_group = fs[args.date]
+        frame_count = len(color_group.keys())
+        for i in range(frame_count):
+            seg_frame = array_to_3dim(seg_group[str(i)])
+            color_frame = array_to_3dim(color_group[str(i)])
+            # boolをintにして*8することで植物の部分が8になるようにする
+            seg_frame = seg_frame * 8
+            seg_frame = label_to_color_image(seg_frame)
+            seg_frame = Image.fromarray(seg_frame)
+            color_frame = Image.fromarray(color_frame)
+            mix_frame = Image.blend(color_frame, seg_frame, 0.7)
+            mix_frame = cv2.cvtColor(np.asarray(mix_frame), cv2.COLOR_BGR2RGB)
+            cv2.imshow("RealSense", mix_frame)
+            key = cv2.waitKey(1) & 0xFF
 
-    for i in range(seg.shape[0]):
-        # レンダリング
-        seg_frame = seg[i, :, :]
-        # boolをintにして*8することで植物の部分が8になるようにする
-        seg_frame = seg_frame * 8
-        seg_frame = label_to_color_image(seg_frame)
+            sleep(0.1)
 
-        seg_frame = Image.fromarray(seg_frame)
-        org_frame = Image.fromarray(org[i,:,:])
-        mix_frame = Image.blend(org_frame, seg_frame, 0.7)
-        mix_frame = cv2.cvtColor(np.asarray(mix_frame), cv2.COLOR_BGR2RGB)
-        cv2.imshow("RealSense", mix_frame)
-        key = cv2.waitKey(1) & 0xFF
+            # qキーを押したら終了
+            if key == ord("q"):
+                cv2.destroyAllWindows()
+                cv2.imwrite("data/frame.jpg", mix_frame)
+                exit()
 
-        sleep(0.1)
 
-        # qキーを押したら終了
-        if key == ord("q"):
-            cv2.destroyAllWindows()
-            cv2.imwrite('frame.jpg', mix_frame)
-            exit()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument("-s", "--site", required=True)
+
+    inf_parser = subparsers.add_parser("inference", parents=[parent_parser])
+    inf_parser.add_argument("-d", "--date", required=True, nargs="*")
+    inf_parser.set_defaults(handler=inference_from_hdf5)
+
+    play_parser = subparsers.add_parser("replay", parents=[parent_parser])
+    play_parser.add_argument("-d", "--date", required=True)
+    play_parser.set_defaults(handler=replay_segment)
+
+    args = parser.parse_args()
+    if hasattr(args, "handler"):
+        args.handler(args)
