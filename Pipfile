@@ -17,11 +17,11 @@ pyclustering = "*"
 tqdm = "*"
 numba = "*"
 opencv-python = "*"
-serial = "*"
 pillow = "*"
 pyrealsense2 = "*"
 black = "*"
 flake8 = "*"
+pyserial = "*"
 
 [requires]
 python_version = "3.7"
