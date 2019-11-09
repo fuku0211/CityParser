@@ -1,9 +1,25 @@
 import pyrealsense2 as rs
 import numpy as np
+import open3d as o3d
 
 WIDTH = 1280
 HEIGHT = 720
 FPS = 30
+
+
+class CameraIntrinsic:
+    def __init__(self):
+        self.width = 1280
+        self.height = 720
+        self.fx = 925.41943359375
+        self.fy = 924.6876220703125
+        self.cx = 638.5858764648438
+        self.cy = 368.45904541015625
+
+    def o3d(self):
+        return o3d.camera.PinholeCameraIntrinsic(
+            self.width, self.height, self.fx, self.fy, self.cx, self.cy
+        )
 
 
 class RealsenseCapture:
