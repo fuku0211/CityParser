@@ -13,7 +13,7 @@
         },
 
         {
-            "name": "Segment",
+            "name": "segment inference",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/segment.py",
@@ -25,18 +25,20 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Play segment movie",
+            "name": "segment replay",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/segment.py",
-            "args": ["play",
-                     "-v",
-                     "20191001_1536"],
+            "args": ["replay",
+                     "-s",
+                     "test",
+                     "-d",
+                     "20191104_152359"],
             "console": "integratedTerminal"
         },
 
         {
-            "name": "PointCloud",
+            "name": "pointcloud create",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/pointcloud.py",
@@ -50,7 +52,7 @@
         },
 
         {
-            "name": "Realsense stream",
+            "name": "realsense stream",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/realsense.py",
@@ -58,7 +60,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Realsense play",
+            "name": "realsense play",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/realsense.py",
@@ -70,7 +72,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Realsense record",
+            "name": "realsense record",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/realsense.py",
