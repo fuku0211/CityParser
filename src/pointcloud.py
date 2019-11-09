@@ -28,7 +28,8 @@ def create_pcd(args):
     color_path = site_path / Path("color.hdf5")
     depth_path = site_path / Path("depth.hdf5")
     gps_path = site_path / Path("gps.hdf5")
-    seg_path = site_path / Path("seg.hdf5")
+    if args.with_seg:
+        seg_path = site_path / Path("seg.hdf5")
 
     points = []
     colors = []
@@ -36,31 +37,30 @@ def create_pcd(args):
         # 保存するデータに対応するhdf5ファイルを開く
         fc = stack.enter_context(h5py.File(str(color_path), "r"))
         fd = stack.enter_context(h5py.File(str(depth_path), "r"))
-        # fs = stack.enter_context(h5py.File(str(seg_path), "r"))
         fg = stack.enter_context(h5py.File(str(gps_path), "r"))
+        if args.with_seg:
+            fs = stack.enter_context(h5py.File(str(seg_path), "r"))
 
         for route in tqdm(args.date_front, desc="whole"):
             color_group = fc[route]
             depth_group = fd[route]
-            # seg_group = fs[route]
             gps_group = fg[route]
+            if args.with_seg:
+                seg_group = fs[route]
 
             frame_count = len(color_group.keys())
             for f in trange(0, frame_count, 2, desc=f"route : {route}"):
                 color_frame = array_to_3dim(color_group[str(f)])
                 depth_frame = array_to_3dim(depth_group[str(f)])
-                # seg_frame = array_to_3dim(seg_group[str(f)].value)
-                # t = time()
                 gps_data = _parse_gps_data(gps_group[str(f)])
-                # print(timw3q0e() - t)
-                seg_frame = None
-                if args.color_only:
+                if args.with_seg:
+                    seg_frame = array_to_3dim(seg_group[str(f)])
                     point, color = _create_pcd_from_frame(
-                        depth_frame, color_frame, gps_data
+                        depth_frame, color_frame, gps_data, seg=seg_frame
                     )
                 else:
                     point, color = _create_pcd_from_frame(
-                        depth_frame, color_frame, gps_data, seg=seg_frame
+                        depth_frame, color_frame, gps_data
                     )
                 points.append(point)
                 colors.append(color)
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
     # createコマンドの動作
     create_parser = subparsers.add_parser('create', parents=[parent_parser])
-    create_parser.add_argument("--color_only", action="store_false")
+    create_parser.add_argument("--with_seg", action="store_true")
     create_parser.set_defaults(handler=create_pcd)
 
     args = parser.parse_args()
