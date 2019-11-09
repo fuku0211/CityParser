@@ -22,6 +22,7 @@ from tqdm import tqdm, trange
 from utils.tool import array_to_3dim, calc_gap_between_yaxis_and_vector, random_colors
 from geometry.capture import CameraIntrinsic
 
+
 def create_pcd(args):
     site_path = Path("data", "hdf5", args.site)
     color_path = site_path / Path("color.hdf5")
@@ -80,7 +81,6 @@ def _parse_gps_data(gpsdata):
 
 
 def _create_pcd_from_frame(depth, color, gps, seg=None, front=True, voxel=0.03):
-
     x, y, dire, ht = gps
 
     # depth情報とrgbから点群を作る
@@ -90,7 +90,7 @@ def _create_pcd_from_frame(depth, color, gps, seg=None, front=True, voxel=0.03):
         depth = o3d.geometry.Image(depth)
     else:
         depth = o3d.geometry.Image(depth * seg)
-    color = o3d.geometry.Image(color_frame)
+    color = o3d.geometry.Image(color)
     rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
         color, depth, depth_trunc=5, convert_rgb_to_intensity=False, depth_scale=1000
     )
@@ -124,7 +124,6 @@ if __name__ == "__main__":
     # 緯度経度を平面直角座標に変換するためのコード
     transformer = pyproj.Transformer.from_proj(6668, 6677)
 
-
     # コマンドライン設定
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
@@ -133,7 +132,7 @@ if __name__ == "__main__":
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("-s", "--site", required=True)
     parent_parser.add_argument("-f", "--date_front", nargs="*", required=True)
-    parent_parser.add_argument("-u", "--date_up", nargs="*", required=True)
+    parent_parser.add_argument("-u", "--date_up", nargs="*")
 
     # createコマンドの動作
     create_parser = subparsers.add_parser('create', parents=[parent_parser])
