@@ -61,21 +61,14 @@ def random_colors(N, bright=True):
 
 
 def array_to_3dim(array):
-    """hdf5に保存した1次元の画像配列を3次元か2次元配列に復元する
+    """hdf5に保存した1次元の画像配列を3次元か2次元に復元する
 
-    Parameters
-    ----------
-    array : numpy array
-        hdf5から読み込んだ配列
+    Args:
+        list(int): hdf5上のflatten化された画像配列
 
-    Returns
-    -------
-    ndarray
-        shape = (横解像度、縦解像度、n)の配列
-        n はrgbのときは3
-
+    Returns:
+        np.ndarray: (横解像度、縦解像度、n)の配列
     """
-
     if array.size == WIDTH * HEIGHT * 3:
         result = np.asanyarray(array).reshape([HEIGHT, WIDTH, 3])
     else:
@@ -84,7 +77,21 @@ def array_to_3dim(array):
 
 
 TRANSFORMER = pyproj.Transformer.from_crs("EPSG:6668", "EPSG:30169")
+
+
 def parse_gps_data(gpsdata):
+    """gpsのデータを変換して取り出す
+
+    Args:
+        gpsdata (list[str]): dgpro-1rwで取得したgpsデータ
+
+    Returns:
+        tuple: (x座標, y座標, 方向, 高度)
+
+    Note:
+        座標は平面直角座標の投影された値
+        方向は北を0として右回りで計測した値
+    """
     # TODO: 標高=楕円体高であってるかわからない
     lat, lon, dire, ht = map(float, itemgetter(3, 5, 8, 33)(gpsdata))
     # 欠損値に対する処理

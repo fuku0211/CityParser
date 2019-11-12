@@ -28,6 +28,7 @@ class Mapbbox:
     Returns:
         Mapbbox
     """
+
     def __init__(self):
         self.min_x = None
         self.min_y = None
@@ -54,7 +55,7 @@ class Mapbbox:
                 self.max_x = max_x
             if max_y > self.max_y:
                 self.max_y = max_y
-        except TypeError: # 初回のエラーに対する処理
+        except TypeError:  # 初回のエラーに対する処理
             self.min_x = min_x
             self.min_y = min_y
             self.max_x = max_x
@@ -103,18 +104,19 @@ def visualize_route(args):
     print("drawing routes")
     with h5py.File(str(gps_path), "r") as fg:
         for date in args.date:
+            # gpsデータを解析して座標値をリストに格納する
             coord_x = []
             coord_y = []
-
             frame_count = len(fg[date].keys())
             for f in trange(frame_count, desc=f"{date}"):
                 c_x, c_y, dire, ht = parse_gps_data(fg[date][str(f)])
-                if c_x is None and c_y is None:
+                if c_x is None and c_y is None: # 欠損値に対する処理
                     continue
                 coord_x.append(c_x)
                 coord_y.append(c_y)
                 if args.num:
                     ax.text(c_x, c_y, str(f), fontsize=10)
+            # 各点を描画
             ax.scatter(
                 coord_x,
                 coord_y,
