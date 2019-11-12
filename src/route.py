@@ -28,11 +28,12 @@ def rotation(x, t):
     return ax
 
 
-def generate_random_color():
-    return [random.randint(0, 1) for _ in range(3)]
+def generate_random_color(n):
+    color = [random.randint(0, 1) for _ in range(3)]
+    return [color for i in range(n)]
 
 
-class SizeObj():
+class Mapbbox:
     def __init__(self):
         self.min_x = 0
         self.min_y = 0
@@ -45,13 +46,23 @@ class SizeObj():
         self.max_x = max(coord_x)
         self.max_y = max(coord_y)
 
+    def offsetted(self, rate=0.1):
+        offset_x = (self.max_x - self.min_x) * rate
+        offset_y = (self.max_y - self.min_y) * rate
+        return (
+            self.min_x - offset_x,
+            self.min_y - offset_y,
+            self.max_x + offset_x,
+            self.max_y + offset_y,
+        )
+
 
 def visualize_route(args):
     site_path = Path("data", "hdf5", args.site)
     gps_path = site_path / Path("gps.hdf5")
 
     fig = plt.figure()
-    figsize = SizeObj()
+    bbox = Mapbbox()
     ax = fig.add_subplot(1, 1, 1)
     with h5py.File(str(gps_path), "r") as fg:
         for date in args.date:
@@ -66,13 +77,21 @@ def visualize_route(args):
                 coord_x.append(c_x)
                 coord_y.append(c_y)
                 dire = 90 - dire if dire <= 90 else 360 - (dire - 90)
-                ax.text(c_x, c_y, str(f), fontsize=10)
-            ax.scatter(coord_x, coord_y, s=10, c=generate_random_color(), label=date)
-            figsize.update(coord_x, coord_y)
+                if args.num:
+                    ax.text(c_x, c_y, str(f), fontsize=10)
+            ax.scatter(
+                coord_x,
+                coord_y,
+                s=10,
+                c=generate_random_color(len(coord_x)),
+                label=date,
+            )
+            bbox.update(coord_x, coord_y)
 
-    ax.set_xlim([figsize.min_x, figsize.max_x])
-    ax.set_ylim([figsize.min_y, figsize.max_y])
-    ax.legend(loc='upper right')
+    bbox_outer = bbox.offsetted()
+    ax.set_xlim([bbox_outer[0], bbox_outer[2]])
+    ax.set_ylim([bbox_outer[1], bbox_outer[3]])
+    ax.legend(loc="upper right")
     ax.set_aspect("equal")
     plt.show()
 
@@ -88,6 +107,7 @@ if __name__ == "__main__":
 
     # 各コマンドの設定
     vis_parser = subparsers.add_parser("vis", parents=[parent_parser])
+    vis_parser.add_argument("--num", action="store_true")
     vis_parser.set_defaults(handler=visualize_route)
 
     args = parser.parse_args()
