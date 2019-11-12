@@ -60,15 +60,15 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "realsense play",
+            "name": "realsense replay",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/realsense.py",
-            "args": ["play",
+            "args": ["replay",
                      "--site",
                      "test",
                      "--date",
-                     "20191104_152359"],
+                     "20191111_121148"],
             "console": "integratedTerminal"
         },
         {
