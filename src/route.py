@@ -57,8 +57,6 @@ def visualize_route(args):
         for date in args.date:
             coord_x = []
             coord_y = []
-            # arrow_x = []
-            # arrow_y = []
 
             frame_count = len(fg[date].keys())
             for f in trange(frame_count):
@@ -68,13 +66,8 @@ def visualize_route(args):
                 coord_x.append(c_x)
                 coord_y.append(c_y)
                 dire = 90 - dire if dire <= 90 else 360 - (dire - 90)
-                # vec = rotation(np.array([0.2, 0]), dire)
-                # arrow_x.append(vec[0])
-                # arrow_y.append(vec[1])
                 ax.text(c_x, c_y, str(f), fontsize=10)
             ax.scatter(coord_x, coord_y, s=10, c=generate_random_color(), label=date)
-            # ax.scatter(arrow_x, arrow_y, s=1.5, c='r')
-            # ax.quiver(coord_x, coord_y, arrow_x, arrow_y, units='xy', width=0.01)
             figsize.update(coord_x, coord_y)
 
     ax.set_xlim([figsize.min_x, figsize.max_x])
