@@ -10,15 +10,20 @@ site_path = Path("data", "hdf5", "test")
 gps_path = site_path / Path("gps.hdf5")
 
 transformer = pyproj.Transformer.from_proj(6668, 6677)
+
+
 def _parse_gps_data(gpsdata):
     # TODO: 標高=楕円体高であってるかわからない
     lat, lon, dire, ht = map(float, itemgetter(3, 5, 8, 33)(gpsdata))
     lat /= 100
     lon /= 100
-    y, x = transformer.transform(lat, lon)
+    if lat < 0 or lon < 0:
+        x, y = None, None
+    else:
+        y, x = transformer.transform(lat, lon)
     return (x, y, dire, ht)
 
-
+n
 def rotation(x, t):
     t = np.deg2rad(t)
     a = np.array([[np.cos(t), -np.sin(t)],
@@ -36,15 +41,18 @@ arrow_x = []
 arrow_y = []
 heights = []
 with h5py.File(str(gps_path), "r") as fg:
-    frame_count = len(fg["20191104_152359"].keys())
+    frame_count = len(fg["20191111_121148"].keys())
     for f in trange(frame_count):
-        c_x, c_y, dire, ht = _parse_gps_data(fg["20191104_152359"][str(f)])
+        c_x, c_y, dire, ht = _parse_gps_data(fg["20191111_121148"][str(f)])
+        if c_x is None and c_y is None:
+            continue
         coord_x.append(c_x)
         coord_y.append(c_y)
         heights.append(ht)
 
         dire = 90 - dire if dire <= 90 else 360 - (dire - 90)
         deg = np.deg2rad(dire)
+        ax1.text(c_x, c_y, str(f))
 
         vec = rotation(np.array([0.2, 0]), dire)
         arrow_x.append(vec[0])
