@@ -117,7 +117,7 @@ def record_realsense_with_gps(args):
                 frame = 0
                 while True:
                     if gps_data is not None:
-                        sleep(0.2)  # これを挟まないと処理速度が足りずgpsの時間がずれていく
+                        sleep(0.3)  # これを挟まないと処理速度が足りずgpsの時間がずれていく
                         frames = cap.read()
                         print(itemgetter(1, 3, 5)(gps_data))
                         gps_group.create_dataset(
