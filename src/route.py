@@ -6,6 +6,7 @@ from tqdm import tqdm, trange
 from operator import itemgetter
 import numpy as np
 import pyproj
+import random
 
 
 def _parse_gps_data(gpsdata):
@@ -27,13 +28,31 @@ def rotation(x, t):
     return ax
 
 
+def generate_random_color():
+    return [random.randint(0, 1) for _ in range(3)]
+
+
+class SizeObj():
+    def __init__(self):
+        self.min_x = 0
+        self.min_y = 0
+        self.max_x = 0
+        self.max_y = 0
+
+    def update(self, coord_x, coord_y):
+        self.min_x = min(coord_x)
+        self.min_y = min(coord_y)
+        self.max_x = max(coord_x)
+        self.max_y = max(coord_y)
+
+
 def visualize_route(args):
     site_path = Path("data", "hdf5", args.site)
     gps_path = site_path / Path("gps.hdf5")
 
     fig = plt.figure()
+    figsize = SizeObj()
     ax = fig.add_subplot(1, 1, 1)
-
     with h5py.File(str(gps_path), "r") as fg:
         for date in args.date:
             coord_x = []
@@ -53,12 +72,14 @@ def visualize_route(args):
                 # arrow_x.append(vec[0])
                 # arrow_y.append(vec[1])
                 ax.text(c_x, c_y, str(f), fontsize=10)
-            ax.scatter(coord_x, coord_y, s=10)
+            ax.scatter(coord_x, coord_y, s=10, c=generate_random_color(), label=date)
             # ax.scatter(arrow_x, arrow_y, s=1.5, c='r')
             # ax.quiver(coord_x, coord_y, arrow_x, arrow_y, units='xy', width=0.01)
+            figsize.update(coord_x, coord_y)
 
-    ax.set_xlim([min(coord_x), max(coord_x)])
-    ax.set_ylim([min(coord_y), max(coord_y)])
+    ax.set_xlim([figsize.min_x, figsize.max_x])
+    ax.set_ylim([figsize.min_y, figsize.max_y])
+    ax.legend(loc='upper right')
     ax.set_aspect("equal")
     plt.show()
 
