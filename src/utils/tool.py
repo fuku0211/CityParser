@@ -30,25 +30,16 @@ def get_gpu_info(nvidia_smi_path='nvidia-smi', keys=DEFAULT_ATTRIBUTES, no_units
     return [ { k: v for k, v in zip(keys, line.split(', ')) } for line in lines ]
 
 
-def calc_gap_between_yaxis_and_vector(x, y):
-    t = math.atan2(y, x)
-    s = None
-    if y >= 0:
-        # 第一象限
-        if x >= 0:
-            s = math.pi / 2 - t
-        # 第二象限
-        else:
-            s = -t + math.pi / 2
-    else:
-        # 第三象限
-        if x < 0:
-            s = -3 / 2 * math.pi - t
-        # 第四象限
-        else:
-            s = -3 / 2 * math.pi - t
+def calc_angle_between_axis(vector, axis="x"):
+    if axis == "x":
+        axis = np.array([0, 1])
+        angle = np.arccos(
+            np.dot(axis, vector) / (np.linalg.norm(axis) * np.linalg.norm(vector))
+        )
+        if vector[0] < 0:
+            angle = 2 * math.pi - angle
 
-    return s
+        return angle
 
 
 def random_colors(N, bright=True):
@@ -81,7 +72,7 @@ def array_to_3dim(array):
     """
 
     if array.size == WIDTH * HEIGHT * 3:
-        result = np.asarray(array).reshape([HEIGHT, WIDTH, 3])
+        result = np.asanyarray(array).reshape([HEIGHT, WIDTH, 3])
     else:
-        result = np.asarray(array).reshape([HEIGHT, WIDTH])
+        result = np.asanyarray(array).reshape([HEIGHT, WIDTH])
     return result
