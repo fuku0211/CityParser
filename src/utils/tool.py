@@ -1,12 +1,12 @@
 import colorsys
 import math
 import random
-import numpy as np
-from geometry.capture import WIDTH, HEIGHT
-import cupy as cp
-import numba
 import subprocess
-import json
+from operator import itemgetter
+
+import numpy as np
+import pyproj
+from geometry.capture import HEIGHT, WIDTH
 
 DEFAULT_ATTRIBUTES = (
     "index",
@@ -81,3 +81,21 @@ def array_to_3dim(array):
     else:
         result = np.asanyarray(array).reshape([HEIGHT, WIDTH])
     return result
+
+
+TRANSFORMER = pyproj.Transformer.from_crs("EPSG:6668", "EPSG:30169")
+def parse_gps_data(gpsdata):
+    # TODO: 標高=楕円体高であってるかわからない
+    lat, lon, dire, ht = map(float, itemgetter(3, 5, 8, 33)(gpsdata))
+    # 欠損値に対する処理
+    if lat < 0 or lon < 0:
+        x, y = None, None
+    # dddmm.mmmm表記になっているのを(度数+分数/60)でddd.dddd表記にする
+    # http://lifelog.main.jp/wordpress/?p=146
+    else:
+        dd_lat, mm_lat = divmod(lat / 100, 1)
+        dd_lon, mm_lon = divmod(lon / 100, 1)
+        lat = dd_lat + mm_lat * 100 / 60
+        lon = dd_lon + mm_lon * 100 / 60
+        y, x = TRANSFORMER.transform(lat, lon)
+    return (x, y, dire, ht)
