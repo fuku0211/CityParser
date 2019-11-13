@@ -61,7 +61,7 @@ def create_pcd(args):
             # フレームごとに点群を作成し座標情報と色情報を取り出す
             frame_count = len(color_group.keys())
             skip_count = 0
-            for f in trange(553, frame_count, 1, desc=f"route : {route}"):
+            for f in trange(0, frame_count, 1, desc=f"route : {route}"):
                 # 進行方向を求めるために2つのフレームのGPS情報を解析する
                 try:
                     gps_from = _parse_gps_data(gps_group[str(f)])
