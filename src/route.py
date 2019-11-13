@@ -92,12 +92,12 @@ def visualize_route(args):
     # 敷地地図を描画
     print("drawing shapes")
     for poly_categ in [site_shps.bldg]:
-        coll = PolyCollection(poly_categ)
+        coll = PolyCollection(poly_categ, facecolor=(0.9, 0.9, 0.9))
         ax.add_collection(coll)
-    for line_categ in [site_shps.road]:
+    for line_categ in [site_shps.road, site_shps.side]:
         for points in tqdm(line_categ):
             points = points.T
-            ax.plot(points[0, :], points[1, :], color="g", lw=1)
+            ax.plot(points[0, :], points[1, :], color=(0, 0, 0), lw=0.2)
             bbox.update(points[0, :], points[1, :])
 
     # 移動ルートを描画
@@ -110,7 +110,7 @@ def visualize_route(args):
             frame_count = len(fg[date].keys())
             for f in trange(frame_count, desc=f"{date}"):
                 c_x, c_y, dire, ht = parse_gps_data(fg[date][str(f)])
-                if c_x is None and c_y is None: # 欠損値に対する処理
+                if c_x is None and c_y is None:  # 欠損値に対する処理
                     continue
                 coord_x.append(c_x)
                 coord_y.append(c_y)
@@ -118,11 +118,7 @@ def visualize_route(args):
                     ax.text(c_x, c_y, str(f), fontsize=10)
             # 各点を描画
             ax.scatter(
-                coord_x,
-                coord_y,
-                s=10,
-                c=_create_random_color(len(coord_x)),
-                label=date,
+                coord_x, coord_y, s=10, label=date,
             )
             bbox.update(coord_x, coord_y)
 
