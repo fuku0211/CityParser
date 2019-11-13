@@ -9,7 +9,7 @@
             "id": "date",
             "description": "date of file",
             "default": "20191112_142615"
-          }
+        }
     ],
     "configurations": [
         {
@@ -19,17 +19,18 @@
             "program": "${file}",
             "console": "integratedTerminal"
         },
-
         {
             "name": "segment inference",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/segment.py",
-            "args": ["segment",
-                     "-s",
-                     "20191001_1536",
-                     "-e",
-                     "20191001_1541"],
+            "args": [
+                "segment",
+                "-s",
+                "20191001_1536",
+                "-e",
+                "20191001_1541"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -37,34 +38,37 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/segment.py",
-            "args": ["replay",
-                     "-s",
-                     "test",
-                     "-d",
-                     "${input:date}"],
+            "args": [
+                "replay",
+                "-s",
+                "test",
+                "-d",
+                "${input:date}"
+            ],
             "console": "integratedTerminal"
         },
-
         {
             "name": "pointcloud create",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/pointcloud.py",
-            "args": ["create",
-            "-s",
-            "test",
-            "-f",
-            "${input:date}",
+            "args": [
+                "create",
+                "-s",
+                "test",
+                "-f",
+                "${input:date}",
             ],
             "console": "integratedTerminal"
         },
-
         {
             "name": "realsense stream",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/realsense.py",
-            "args": ["stream"],
+            "args": [
+                "stream"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -72,11 +76,13 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/realsense.py",
-            "args": ["replay",
-                     "--site",
-                     "test",
-                     "--date",
-                     "${input:date}"],
+            "args": [
+                "replay",
+                "--site",
+                "test",
+                "--date",
+                "${input:date}"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -84,22 +90,39 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/realsense.py",
-            "args": ["record",
-                     "--site",
-                     "test"],
+            "args": [
+                "record",
+                "--site",
+                "test"
+            ],
             "console": "integratedTerminal"
-        }
+        },
         {
             "name": "route visualize",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/route.py",
             "envFile": "${workspaceFolder}/.env",
-            "args": ["vis",
-                     "-s",
-                     "test",
-                     "-d",
-                     "${input:date}"]
+            "args": [
+                "vis",
+                "-s",
+                "test",
+                "-d",
+                "${input:date}"
+            ]
+        },
+        {
+            "name": "route split",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/route.py",
+            "args": [
+                "split",
+                "-s",
+                "test",
+                "-d",
+                "${input:date}"
+            ]
         }
     ]
 }

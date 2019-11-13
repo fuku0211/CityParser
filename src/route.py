@@ -1,11 +1,15 @@
 import argparse
-import matplotlib.pyplot as plt
-import h5py
-from pathlib import Path
-from tqdm import tqdm, trange
+import json
 import random
-from geometry.shapes import Shape
+from contextlib import ExitStack
+from pathlib import Path
+
+import h5py
+import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
+from tqdm import tqdm, trange
+
+from geometry.shapes import Shape
 from utils.tool import parse_gps_data
 
 
@@ -130,6 +134,87 @@ def visualize_route(args):
     plt.show()
 
 
+class Route:
+    def __init__(self, json_path, hdf5_path, seg=False):
+        self.json_path = json_path
+        self.depth_path = hdf5_path / Path("depth.hdf5")
+        self.color_path = hdf5_path / Path("color.hdf5")
+        self.gps_path = hdf5_path / Path("gps.hdf5")
+        self.seg_path = hdf5_path / Path("seg.hdf5") if seg else None
+
+    def extract_routes_from_config(self, dates):
+        """configファイルを元に必要なルートの情報を抽出する
+
+        Args:
+            dates (list[str]): 処理対象の日時
+        """
+        with ExitStack() as stack:
+            fj = stack.enter_context(open(self.json_path, "r"))
+            fd = stack.enter_context(h5py.File(self.depth_path, "a"))
+            fc = stack.enter_context(h5py.File(self.color_path, "a"))
+            fg = stack.enter_context(h5py.File(self.gps_path, "a"))
+            fs = None
+            if self.seg_path is not None:
+                fs = stack.enter_context(h5py.File(self.seg_path, "a"))
+
+            routes_dict = json.load(fj)
+
+            # コマンドライン引数に入力したルートがjson上で設定されていない場合処理を終了する
+            if set(dates) <= set(routes_dict.keys()):
+                pass
+            else:
+                print("Route config error")
+                error = set(dates) - set(routes_dict.keys())
+                print(f"You should create config file for {error}")
+                exit()
+
+            print("the number of routes")
+            for route, bounds in routes_dict.items():
+                print(f"    - {route} -> {len(bounds)} routes")
+
+            for route, bounds in tqdm(routes_dict.items(), desc="whole"):
+                for bound_name, bound in tqdm(bounds.items(), desc=f"{route}"):
+                    # segはない場合があるためその時は無視する
+                    if self.seg_path is None:
+                        key_files = [fd, fc, fg]
+                    else:
+                        key_files = [fd, fc, fg, fs]
+
+                    group_name = route + f"_{bound_name}"
+                    # すでにファイル内に名前が重複したグループがあった場合削除する
+                    for file in key_files:
+                        if group_name in list(file.keys()):
+                            del file[group_name]
+
+                    # 元のグループから情報を取得して抽出先のグループに書き込む
+                    for file in key_files:
+                        out_group = file.create_group(group_name)  # 抽出先のグループ
+                        categ_name = file.filename.split("\\")[-1]
+                        desc_text = f"{categ_name}:{bound_name}"
+                        st = bound[0]
+                        end = bound[1]
+                        i = 0
+                        for f in tqdm(range(st, end), desc=desc_text, leave=False):
+                            out_group.create_dataset(
+                                str(i), data=file[route][str(f)], compression="gzip"
+                            )
+                            i += 1
+
+
+def extract_routes(args):
+    """configファイルをもとにルートを抽出する
+
+    """
+    json_path = Path("data", "json", args.site, "config.json")
+    hdf5_path = Path("data", "hdf5", args.site)
+
+    if args.with_seg:
+        routes = Route(json_path, hdf5_path, seg=True)
+    else:
+        routes = Route(json_path, hdf5_path)
+    routes.extract_routes_from_config(args.date)
+
+
 if __name__ == "__main__":
     # コマンドライン用
     parser = argparse.ArgumentParser()
@@ -137,12 +222,16 @@ if __name__ == "__main__":
 
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("-s", "--site", required=True)
-    parent_parser.add_argument("-d", "--date", required=True, nargs="*")
+    parent_parser.add_argument("-d", "--date", required=True, nargs="+")
 
     # 各コマンドの設定
     vis_parser = subparsers.add_parser("vis", parents=[parent_parser])
     vis_parser.add_argument("--num", action="store_true")
     vis_parser.set_defaults(handler=visualize_route)
+
+    split_parser = subparsers.add_parser("split", parents=[parent_parser])
+    split_parser.add_argument("--with_seg", action="store_true")
+    split_parser.set_defaults(handler=extract_routes)
 
     args = parser.parse_args()
     if hasattr(args, "handler"):
