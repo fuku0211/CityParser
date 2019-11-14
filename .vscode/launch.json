@@ -56,7 +56,7 @@
                 "create",
                 "-s",
                 "test",
-                "-f",
+                "-d",
                 "${input:date}",
             ],
             "console": "integratedTerminal"
