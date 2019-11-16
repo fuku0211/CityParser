@@ -8,7 +8,7 @@
             "type": "promptString",
             "id": "date",
             "description": "date of file",
-            "default": "20191112_142615"
+            "default": "20191112_142615_a"
         }
     ],
     "configurations": [
@@ -60,6 +60,22 @@
                 "${input:date}",
             ],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "pointcloud cluster",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/pointcloud.py",
+            "args":[
+                "cluster",
+                "-s",
+                "test",
+                "-d",
+                "${input:date}",
+                "-m",
+                "dbscan",
+                "--export",
+            ]
         },
         {
             "name": "realsense stream",
