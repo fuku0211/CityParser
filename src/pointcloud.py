@@ -88,6 +88,7 @@ def create_pcd(args):
                 pts_path = Path("data", "pts", args.site)
             else:
                 pts_path = Path("data", "pts", args.site, "noseg")
+            pts_path.mkdir(parents=True, exist_ok=True)
             file_path = pts_path / Path(route + ".pts")
             o3d.io.write_point_cloud(str(file_path), pcd)
 
