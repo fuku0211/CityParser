@@ -52,8 +52,8 @@ def replay_movie(args):
 
         for i in range(len(color_group)):
             # ベクトル化したデータをもとの配列の形に戻す
-            color_frame = array_to_3dim(color_group[str(i)])
-            depth_frame = array_to_3dim(depth_group[str(i)])
+            color_frame = np.rot90(array_to_3dim(color_group[str(i)]))
+            depth_frame = np.rot90(array_to_3dim(depth_group[str(i)]))
 
             # デプスマップをヒートマップに変換
             frame_heatmap = cv2.applyColorMap(
