@@ -73,7 +73,7 @@ def inference_from_hdf5(args):
     color_path = site_path / Path("color.hdf5")
     seg_path = site_path / Path("seg.hdf5")
 
-    model = create_model()
+    model = create_model(args)
     with h5py.File(str(color_path), "r") as fc, h5py.File(str(seg_path), "a") as fs:
         for date in tqdm(args.date, desc="all"):
             color_group = fc[date]
