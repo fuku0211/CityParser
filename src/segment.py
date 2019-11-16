@@ -141,6 +141,7 @@ if __name__ == "__main__":
 
     inf_parser = subparsers.add_parser("inference", parents=[parent_parser])
     inf_parser.add_argument("-d", "--date", required=True, nargs="*")
+    inf_parser.add_argument("--model", type=int, default=0)
     inf_parser.set_defaults(handler=inference_from_hdf5)
 
     play_parser = subparsers.add_parser("replay", parents=[parent_parser])

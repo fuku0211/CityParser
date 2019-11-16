@@ -6,12 +6,13 @@
 import os
 import tarfile
 import tempfile
-from six.moves import urllib
+from collections import OrderedDict
 
 import numpy as np
+from six.moves import urllib
 
 
-def create_model():
+def create_model(args):
     import tensorflow as tf
 
     class DeepLabModel(object):
@@ -62,19 +63,26 @@ def create_model():
             seg_map = batch_seg_map[0]
             return seg_map
 
-    MODEL_NAME = "xception71_dpc_cityscapes_trainfine"
-
     _DOWNLOAD_URL_PREFIX = "http://download.tensorflow.org/models/"
-    _MODEL_URLS = {
-        "mobilenetv2_coco_voctrainaug": "deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
-        "mobilenetv2_coco_voctrainval": "deeplabv3_mnv2_pascal_trainval_2018_01_29.tar.gz",
-        "xception_coco_voctrainaug": "deeplabv3_pascal_train_aug_2018_01_04.tar.gz",
-        "xception_coco_voctrainval": "deeplabv3_pascal_trainval_2018_01_04.tar.gz",
-        "mobilenetv2_coco_cityscapes_trainfine": "deeplabv3_mnv2_cityscapes_train_2018_02_05.tar.gz",
-        "xception65_cityscapes_trainfine": "deeplabv3_cityscapes_train_2018_02_06.tar.gz",
-        "xception71_dpc_cityscapes_trainfine": "deeplab_cityscapes_xception71_trainfine_2018_09_08.tar.gz",
-        "xception71_dpc_cityscapes_trainval": "deeplab_cityscapes_xception71_trainvalfine_2018_09_08.tar.gz",
-        "xception65_ade20k_train": "deeplabv3_xception_ade20k_train_2018_05_29.tar.gz",
+    model_urls = {
+        # "xception71_dpc_cityscapes_trainval"
+        0: "deeplab_cityscapes_xception71_trainvalfine_2018_09_08.tar.gz",
+        # "xception71_dpc_cityscapes_trainfine"
+        1: "deeplab_cityscapes_xception71_trainfine_2018_09_08.tar.gz",
+        # "xception65_cityscapes_trainfine"
+        2: "deeplabv3_cityscapes_train_2018_02_06.tar.gz",
+        # "xception65_ade20k_train",
+        3: "deeplabv3_xception_ade20k_train_2018_05_29.tar.gz",
+        # "mobilenetv2_coco_voctrainaug"
+        4: "deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
+        # "mobilenetv2_coco_voctrainval"
+        5: "deeplabv3_mnv2_pascal_trainval_2018_01_29.tar.gz",
+        # "xception_coco_voctrainaug"
+        6: "deeplabv3_pascal_train_aug_2018_01_04.tar.gz",
+        # "xception_coco_voctrainval"
+        7: "deeplabv3_pascal_trainval_2018_01_04.tar.gz",
+        # "mobilenetv2_coco_cityscapes_trainfine"
+        8: "deeplabv3_mnv2_cityscapes_train_2018_02_05.tar.gz",
     }
     _TARBALL_NAME = "deeplab_model.tar.gz"
 
@@ -84,7 +92,7 @@ def create_model():
     download_path = os.path.join(model_dir, _TARBALL_NAME)
     print("downloading model, this might take a while...")
     urllib.request.urlretrieve(
-        _DOWNLOAD_URL_PREFIX + _MODEL_URLS[MODEL_NAME], download_path
+        _DOWNLOAD_URL_PREFIX + model_urls[args.model], download_path
     )
     print("download completed! loading DeepLab model...")
 
