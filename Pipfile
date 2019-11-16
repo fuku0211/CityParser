@@ -6,12 +6,13 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-cupy-cuda90 = "*"
+tensorflow = "==1.15"
+cupy-cuda100 = "*"
 h5py = "*"
 matplotlib = "*"
 numpy = "*"
 open3d = "*"
-pyproj = "==2.4.0"
+pyproj = "*"
 pyshp = "*"
 pyclustering = "*"
 tqdm = "*"
@@ -24,7 +25,7 @@ flake8 = "*"
 pyserial = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.6"
 
 [pipenv]
 allow_prereleases = true
