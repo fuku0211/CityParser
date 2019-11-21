@@ -7,6 +7,7 @@ from pathlib import Path
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
+from shapely.geometry import LineString, Polygon
 from tqdm import tqdm, trange
 
 from geometry.shapes import Shape
@@ -38,18 +39,21 @@ class Mapbbox:
         self.min_y = None
         self.max_x = None
         self.max_y = None
+        self.polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
 
-    def update(self, coord_x, coord_y):
-        """点の座標をもとにboundingboxを更新する
+    def update(self, coords_x, coords_y):
+        """引数の点がbounding boxの外側にあるとき、その点が含まれるようにbounding boxの境界の値を調整する
 
         Args:
-            coord_x (list[float]): x座標のリスト
-            coord_y (list[float]): y座標のリスト
+            coords_x (list[float]): x座標のリスト
+            coords_y (list[float]): y座標のリスト
         """
-        min_x = min(coord_x)
-        min_y = min(coord_y)
-        max_x = max(coord_x)
-        max_y = max(coord_y)
+
+        min_x = min(coords_x)
+        min_y = min(coords_y)
+        max_x = max(coords_x)
+        max_y = max(coords_y)
+        # bboxの境界の外側に
         try:
             if min_x < self.min_x:
                 self.min_x = min_x
@@ -59,14 +63,27 @@ class Mapbbox:
                 self.max_x = max_x
             if max_y > self.max_y:
                 self.max_y = max_y
-        except TypeError:  # 初回のエラーに対する処理
+
+        # 初回はNoneを比較することになりエラーが発生する
+        # 対策として引数をそのままプロパティに代入する
+        except TypeError:
             self.min_x = min_x
             self.min_y = min_y
             self.max_x = max_x
             self.max_y = max_y
 
-    def offsetted(self, rate=0.1):
-        """余白を作って表示する
+        finally:
+            self.polygon = Polygon(
+                [
+                    (self.min_x, self.min_y),
+                    (self.max_x, self.min_y),
+                    (self.max_x, self.max_y),
+                    (self.min_x, self.max_y),
+                ]
+            )
+
+    def apply_margin(self, rate=0.1):
+        """bboxの境界を余白を含めた値に変更する
 
         Args:
             rate (float, optional): 幅全体に対する余白の割合. Defaults to 0.1.
@@ -76,15 +93,16 @@ class Mapbbox:
         """
         offset_x = (self.max_x - self.min_x) * rate
         offset_y = (self.max_y - self.min_y) * rate
-        return (
-            self.min_x - offset_x,
-            self.min_y - offset_y,
-            self.max_x + offset_x,
-            self.max_y + offset_y,
-        )
+        self.min_x -= offset_x
+        self.min_y -= offset_y
+        self.max_x += offset_x
+        self.max_y += offset_y
+
+    def contain(self, geometry):
+        return self.polygon.contains(geometry)
 
 
-def visualize_route(args):
+def visualize_route(args, text_step=10):
     date_path = Path("data", "hdf5", args.site)
     shape_path = Path("data", "shp", args.site)
     gps_path = date_path / Path("gps.hdf5")
@@ -93,42 +111,49 @@ def visualize_route(args):
     fig = plt.figure()
     bbox = Mapbbox()
     ax = fig.add_subplot(1, 1, 1)
-    # 敷地地図を描画
-    print("drawing shapes")
-    for poly_categ in [site_shps.bldg]:
-        coll = PolyCollection(poly_categ, facecolor=(0.9, 0.9, 0.9))
-        ax.add_collection(coll)
-    for line_categ in [site_shps.road, site_shps.side]:
-        for points in tqdm(line_categ):
-            points = points.T
-            ax.plot(points[0, :], points[1, :], color=(0, 0, 0), lw=0.2)
-            bbox.update(points[0, :], points[1, :])
-
     # 移動ルートを描画
     print("drawing routes")
     with h5py.File(str(gps_path), "r") as fg:
         for date in args.date:
             # gpsデータを解析して座標値をリストに格納する
-            coord_x = []
-            coord_y = []
+            route_coords_x = []
+            route_coords_y = []
             frame_count = len(fg[date].keys())
-            for f in trange(frame_count, desc=f"{date}"):
+            for i, f in enumerate(trange(frame_count, desc=f"{date}")):
                 c_x, c_y, dire, ht = parse_gps_data(fg[date][str(f)])
                 if c_x is None and c_y is None:  # 欠損値に対する処理
                     continue
-                coord_x.append(c_x)
-                coord_y.append(c_y)
-                if args.num:
+                route_coords_x.append(c_x)
+                route_coords_y.append(c_y)
+                if args.num and i % text_step == 0:  # フレーム番号を一定間隔で表示する
                     ax.text(c_x, c_y, str(f), fontsize=10)
             # 各点を描画
             ax.scatter(
-                coord_x, coord_y, s=10, label=date,
+                route_coords_x, route_coords_y, s=10, label=date, zorder=2
             )
-            bbox.update(coord_x, coord_y)
+            bbox.update(route_coords_x, route_coords_y)
 
-    bbox_outer = bbox.offsetted()
-    ax.set_xlim([bbox_outer[0], bbox_outer[2]])
-    ax.set_ylim([bbox_outer[1], bbox_outer[3]])
+    # 敷地地図を描画
+    print("drawing shapes")
+    for poly_categ in [site_shps.bldg]:
+        # 地図のbbox内に存在するもののみを取り出して描画
+        poly_inbbox = []
+        for p in tqdm(poly_categ):
+            if bbox.contain(Polygon(p)):
+                poly_inbbox.append(p)
+
+        coll = PolyCollection(poly_inbbox, facecolor=(0.9, 0.9, 0.9))
+        ax.add_collection(coll)
+
+    for line_categ in [site_shps.road, site_shps.side]:
+        # 地図のbbox内に存在するもののみを取り出して描画
+        for l in tqdm(line_categ):
+            if bbox.contain(LineString(l)):
+                ax.plot(l.T[0, :], l.T[1, :], color=(0, 0, 0), lw=0.2, zorder=1)
+
+    bbox.apply_margin()
+    ax.set_xlim([bbox.min_x, bbox.max_x])
+    ax.set_ylim([bbox.min_y, bbox.max_y])
     ax.legend(loc="upper right")
     ax.set_aspect("equal")
     plt.show()
@@ -143,7 +168,7 @@ class Route:
         self.seg_path = hdf5_path / Path("seg.hdf5") if seg else None
 
     def extract_routes_from_config(self, dates):
-        """configファイルを元に必要なルートの情報を抽出する
+        """configファイルを元に、あるルートから必要な部分だけを抽出する
 
         Args:
             dates (list[str]): 処理対象の日時
