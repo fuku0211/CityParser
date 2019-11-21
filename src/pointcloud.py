@@ -8,15 +8,17 @@ import h5py
 import numpy as np
 import open3d as o3d
 import pyproj
-from pyclustering.cluster import cluster_visualizer
 from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer
 from pyclustering.cluster.dbscan import dbscan
-from pyclustering.cluster.kmeans import kmeans, kmeans_visualizer
-from pyclustering.samples.definitions import FCPS_SAMPLES
 from tqdm import tqdm, trange
 
 from geometry.capture import CameraIntrinsic
-from utils.tool import array_to_3dim, calc_angle_between_axis, parse_gps_data, random_colors
+from utils.tool import (
+    array_to_3dim,
+    calc_angle_between_axis,
+    parse_gps_data,
+    random_colors,
+)
 
 
 class Frame:
@@ -74,9 +76,9 @@ def create_pcd(args):
 
                 # 点群の座標と色を取得する
                 if args.front:
-                    point, color = _create_pcd_from_frame(frame, front=True)
+                    point, color = _create_pcd_from_frame(frame, front=True, voxel=args.voxel)
                 else:
-                    point, color = _create_pcd_from_frame(frame)
+                    point, color = _create_pcd_from_frame(frame, voxel=args.voxel)
                 points.append(point)
                 colors.append(color)
 
@@ -84,12 +86,12 @@ def create_pcd(args):
             pcd.points = o3d.utility.Vector3dVector(np.concatenate(points, axis=0))
             pcd.colors = o3d.utility.Vector3dVector(np.concatenate(colors, axis=0))
             # segmentation結果を使っていない点群は別ファイルに保存
+            route_path = Path("data", "pts", args.site, route)
+            route_path.mkdir(parents=True, exist_ok=True)
             if args.with_seg:
-                pts_path = Path("data", "pts", args.site)
+                file_path = route_path / Path("segmentation.pts")
             else:
-                pts_path = Path("data", "pts", args.site, "noseg")
-            pts_path.mkdir(parents=True, exist_ok=True)
-            file_path = pts_path / Path(route + ".pts")
+                file_path = route_path / Path("original.pts")
             o3d.io.write_point_cloud(str(file_path), pcd)
 
 
@@ -148,51 +150,65 @@ def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False):
 
 def cluster_pcd(args):
     site_path = Path("data", "pts", args.site)
-    for date in tqdm(args.date, desc="all"):
-        file_path = site_path / Path(date + ".pts")
-        pcd = o3d.io.read_point_cloud(str(file_path))
-        elem_pcd = np.asarray(pcd.points)
+    dates = [i.name for i in site_path.iterdir()]
+    for route in dates:
+        print(f"route: {route}")
+        load_path = site_path / Path(route, "segmentation.pts")
+        load_pcd = o3d.io.read_point_cloud(str(load_path))
+        result_pcd = o3d.geometry.PointCloud()
 
-        start = time()
-        # クラスタリング手法によって分岐
-        if args.method == "dbscan":
-            # Create DBSCAN algorithm.
-            dbscan_instance = dbscan(elem_pcd, 0.3, 3)
-            # Start processing by DBSCAN.
-            dbscan_instance.process()
-            # Obtain results of clustering.
-            clusters = dbscan_instance.get_clusters()
-            noise = dbscan_instance.get_noise()
+        labels = list(load_pcd.cluster_dbscan(0.3, 3, True))
 
-        elif args.method == "kmeans":
-            # Prepare initial centers using K-Means++ method.
-            initial_centers = kmeans_plusplus_initializer(elem_pcd, 8).initialize()
-            # Create instance of K-Means algorithm with prepared centers.
-            kmeans_instance = kmeans(elem_pcd, initial_centers)
-            # Run cluster analysis and obtain results.
-            kmeans_instance.process()
-            clusters = kmeans_instance.get_clusters()
-        print(f"file : {date}")
-        print(f"clustering time : {time() - start}")
+        pts = np.asarray(load_pcd.points)
+        noiseless = [pts[i, :] for i in range(pts.shape[0]) if labels[i] != -1]
+        result_pcd.points = o3d.utility.Vector3dVector(noiseless)
+        colors = random_colors(max(labels) + 1)
+        colors = [colors[labels[i]] for i in range(pts.shape[0]) if labels[i] != -1]
+        result_pcd.colors = o3d.utility.Vector3dVector(colors)
 
-        # 各クラスタに色を設定する
-        c = random_colors(len(clusters))
-        vis = []
-        for idx, cluster in enumerate(clusters):
-            p = o3d.geometry.PointCloud()
-            p.points = o3d.utility.Vector3dVector([elem_pcd[i, :] for i in cluster])
-            p.paint_uniform_color(c[idx])
-            vis.append(p)
+        save_path = site_path / Path(route, "clustering.pts")
+        o3d.io.write_point_cloud(str(save_path), result_pcd)
 
-        # 同じ日付のフォルダが既に存在していた場合、ファイルを削除する
-        date_folder = site_path / Path(date)
-        if date_folder.exists():
-            [p.unlink() for p in date_folder.iterdir()]
-        date_folder.mkdir(exist_ok=True)
+        # start = time()
+        # # クラスタリング手法によって分岐
+        # if args.method == "dbscan":
+        #     # Create DBSCAN algorithm.
+        #     dbscan_instance = dbscan(elem_pcd, 0.3, 3)
+        #     # Start processing by DBSCAN.
+        #     dbscan_instance.process()
+        #     # Obtain results of clustering.
+        #     clusters = dbscan_instance.get_clusters()
+        #     noise = dbscan_instance.get_noise()
 
-        for i, p in enumerate(vis):
-            cluster_file = date_folder / Path(str(i) + ".pts")
-            o3d.io.write_point_cloud(str(cluster_file), vis[i])
+        # elif args.method == "kmeans":
+        #     # Prepare initial centers using K-Means++ method.
+        #     initial_centers = kmeans_plusplus_initializer(elem_pcd, 8).initialize()
+        #     # Create instance of K-Means algorithm with prepared centers.
+        #     kmeans_instance = kmeans(elem_pcd, initial_centers)
+        #     # Run cluster analysis and obtain results.
+        #     kmeans_instance.process()
+        #     clusters = kmeans_instance.get_clusters()
+        # print(f"file : {date}")
+        # print(f"clustering time : {time() - start}")
+
+        # # 各クラスタに色を設定する
+        # c = random_colors(len(clusters))
+        # vis = []
+        # for idx, cluster in enumerate(clusters):
+        #     p = o3d.geometry.PointCloud()
+        #     p.points = o3d.utility.Vector3dVector([elem_pcd[i, :] for i in cluster])
+        #     p.paint_uniform_color(c[idx])
+        #     vis.append(p)
+
+        # # 同じ日付のフォルダが既に存在していた場合、ファイルを削除する
+        # date_folder = site_path / Path(date)
+        # if date_folder.exists():
+        #     [p.unlink() for p in date_folder.iterdir()]
+        # date_folder.mkdir(exist_ok=True)
+
+        # for i, p in enumerate(vis):
+        #     cluster_file = date_folder / Path(str(i) + ".pts")
+        #     o3d.io.write_point_cloud(str(cluster_file), vis[i])
 
 
 if __name__ == "__main__":
@@ -206,11 +222,12 @@ if __name__ == "__main__":
     # 共通の引数
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("-s", "--site", required=True)
-    parent_parser.add_argument("-d", "--date", nargs="*", required=True)
 
     # createコマンドの動作
     create_parser = subparsers.add_parser("create", parents=[parent_parser])
+    create_parser.add_argument("-d", "--date", nargs="*", required=True)
     create_parser.add_argument("--with_seg", action="store_true")
+    create_parser.add_argument("--voxel", default=0.1)
     create_parser.add_argument("--front", action="store_true")
     create_parser.set_defaults(handler=create_pcd)
 
@@ -218,7 +235,6 @@ if __name__ == "__main__":
     clus_parser.add_argument(
         "-m", "--method", choices=["dbscan", "xmeans"], required=True
     )
-    clus_parser.add_argument("--export", action="store_true")
     clus_parser.set_defaults(handler=cluster_pcd)
 
     args = parser.parse_args()
