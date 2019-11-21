@@ -12,7 +12,7 @@ from tqdm import tqdm, trange
 
 from geometry.shapes import Shape
 from utils.tool import parse_gps_data
-
+from utils.color_output import output_with_color
 
 def _create_random_color(n):
     """0から1で表現されたrgbをn個もつリストを返却
@@ -112,7 +112,7 @@ def visualize_route(args, text_step=10):
     bbox = Mapbbox()
     ax = fig.add_subplot(1, 1, 1)
     # 移動ルートを描画
-    print("drawing routes")
+    output_with_color("drawing routes", "g")
     with h5py.File(str(gps_path), "r") as fg:
         for date in args.date:
             # gpsデータを解析して座標値をリストに格納する
@@ -134,7 +134,7 @@ def visualize_route(args, text_step=10):
             bbox.update(route_coords_x, route_coords_y)
 
     # 敷地地図を描画
-    print("drawing shapes")
+    output_with_color("drawing shapes", "g")
     for poly_categ in [site_shps.bldg]:
         # 地図のbbox内に存在するもののみを取り出して描画
         poly_inbbox = []

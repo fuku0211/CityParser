@@ -2,12 +2,13 @@ import shapefile
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
+from utils.color_output import output_with_color
 
 
 class Shape:
     def __init__(self, shp_path):
         self.path = shp_path
-        print("loading shape file")
+        output_with_color("loading shape file", "g")
         self.bldg = self._load_parts("tatemono.shp")
         self.road = self._load_parts("road.shp")
         self.side = self._load_parts("hodou.shp")
