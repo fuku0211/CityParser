@@ -2,7 +2,6 @@ import gpxpy
 import gpxpy.gpx
 import h5py
 from operator import itemgetter
-from datetime import datetime, timedelta
 
 gpx = gpxpy.gpx.GPX()
 
@@ -16,7 +15,8 @@ gpx_segment_b = gpxpy.gpx.GPXTrackSegment()
 gpx_track.segments.append(gpx_segment_a)
 gpx_track.segments.append(gpx_segment_b)
 
-px_file_w = open('sample_timefix.gpx', 'w')
+px_file_w = open("sample_timefix.gpx", "w")
+
 
 def parse_gps_data(gpsdata):
     """gpsのデータを変換して取り出す
@@ -35,7 +35,7 @@ def parse_gps_data(gpsdata):
     lat, lon, dire, ht = map(float, itemgetter(3, 5, 8, 33)(gpsdata))
     # 欠損値に対する処理
     if lat < 0 or lon < 0:
-        x, y = None, None
+        lat, lon = None, None
     # dddmm.mmmm表記になっているのを(度数+分数/60)でddd.dddd表記にする
     # http://lifelog.main.jp/wordpress/?p=146
     else:
@@ -45,8 +45,11 @@ def parse_gps_data(gpsdata):
         lon = dd_lon + mm_lon * 100 / 60
     return (lat, lon)
 
+
 # Create points:
-with h5py.File("C:\\Laboratory\\model\\distro_analyzer\\data\\hdf5\\test\\gps.hdf5", "r") as f:
+with h5py.File(
+    "C:\\Laboratory\\model\\distro_analyzer\\data\\hdf5\\test\\gps.hdf5", "r"
+) as f:
     group_a = f["20191112_142615_a"]
     group_b = f["20191112_142615_b"]
 
@@ -58,5 +61,5 @@ with h5py.File("C:\\Laboratory\\model\\distro_analyzer\\data\\hdf5\\test\\gps.hd
         gpx_segment_b.points.append(gpxpy.gpx.GPXTrackPoint(lat, lon))
 
 # You can add routes and waypoints, too...
-px_file_w.write(gpx.to_xml(version='1.1'))
+px_file_w.write(gpx.to_xml(version="1.1"))
 px_file_w.close()

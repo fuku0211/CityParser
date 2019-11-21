@@ -9,7 +9,6 @@ from tqdm import tqdm
 from geometry.model import create_model, deeplabv3
 from utils.tool import HEIGHT, WIDTH, array_to_3dim, get_gpu_info
 import h5py
-from pprint import pprint
 
 
 def __create_cityscapes_label_colormap():

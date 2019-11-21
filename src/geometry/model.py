@@ -1,12 +1,6 @@
-# DeepLab Demo
-# This demo will demostrate the steps to run deeplab semantic segmentation model on sample input images.
-
-# @title Imports
-
 import os
 import tarfile
 import tempfile
-from collections import OrderedDict
 
 import numpy as np
 from six.moves import urllib
