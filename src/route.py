@@ -185,18 +185,18 @@ class Route:
                 exit()
 
             print("the number of routes")
-            for route, bounds in routes_dict.items():
-                print(f"    - {route} -> {len(bounds)} routes")
+            for route, sections in routes_dict.items():
+                print(f"    - {route} -> {len(sections)} routes")
 
-            for route, bounds in tqdm(routes_dict.items(), desc="whole"):
-                for bound_name, bound in tqdm(bounds.items(), desc=f"{route}"):
-                    # segはない場合があるためその時は無視する
-                    if self.seg_path is None:
-                        key_files = [fd, fc, fg]
-                    else:
-                        key_files = [fd, fc, fg, fs]
+            # segはない場合があるためその時は無視する
+            if self.seg_path is None:
+                key_files = [fd, fc, fg]
+            else:
+                key_files = [fd, fc, fg, fs]
 
-                    group_name = route + f"_{bound_name}"
+            for route, sections in tqdm(routes_dict.items(), desc="whole"):
+                for section_name, sections in tqdm(sections.items(), desc=f"{route}"):
+                    group_name = route + f"_{section_name}"
                     # すでにファイル内に名前が重複したグループがあった場合削除する
                     for file in key_files:
                         if group_name in list(file.keys()):
@@ -206,15 +206,14 @@ class Route:
                     for file in key_files:
                         out_group = file.create_group(group_name)  # 抽出先のグループ
                         categ_name = file.filename.split("\\")[-1]
-                        desc_text = f"{categ_name}:{bound_name}"
-                        st = bound[0]
-                        end = bound[1]
-                        i = 0
-                        for f in tqdm(range(st, end), desc=desc_text, leave=False):
-                            out_group.create_dataset(
-                                str(i), data=file[route][str(f)], compression="gzip"
-                            )
-                            i += 1
+                        desc_text = f"{categ_name}:{section_name}"
+                        for section in sections:
+                            st = section[0]
+                            end = section[1]
+                            for f in tqdm(range(st, end), desc=desc_text, leave=False):
+                                out_group.create_dataset(
+                                    str(f), data=file[route][str(f)], compression="gzip"
+                                )
 
 
 def extract_routes(args):
