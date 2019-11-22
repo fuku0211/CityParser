@@ -101,13 +101,21 @@ def visualize_route(args, text_step=10):
     # 移動ルートを描画
     output_with_color("drawing routes", "g")
     with h5py.File(str(gps_path), "r") as fg:
-        for date in args.date:
+        if args.all is True: # 分割後のルートを処理する場合
+            routes = [i for i in fg.keys() if args.date[0] + "_" in i]
+        else:
+            routes = args.date
+
+        for route in tqdm(routes, desc="all"):
             # gpsデータを解析して座標値をリストに格納する
             route_coords_x = []
             route_coords_y = []
-            frame_count = len(fg[date].keys())
-            for f in trange(args.start, frame_count, 1, desc=f"{date}"):
-                c_x, c_y, dire, ht = parse_gps_data(fg[date][str(f)])
+            frame_keys = list(map(int, fg[route].keys()))
+            frame_keys.sort()
+            if args.start is not None:  # 開始地点指定時は必要な部分のリストを取り出す
+                frame_keys = [i for i in frame_keys if i >= args.start]
+            for f in tqdm(frame_keys, desc=f"{route}", leave=False):
+                c_x, c_y, dire, ht = parse_gps_data(fg[route][str(f)])
                 if c_x is None and c_y is None:  # 欠損値に対する処理
                     continue
                 route_coords_x.append(c_x)
@@ -116,13 +124,13 @@ def visualize_route(args, text_step=10):
                     ax.text(c_x, c_y, str(f), fontsize=10)
             # 各点を描画
             ax.scatter(
-                route_coords_x, route_coords_y, s=10, label=date, zorder=2
+                route_coords_x, route_coords_y, s=10, label=route, zorder=2
             )
             bbox.update(route_coords_x, route_coords_y)
 
     # 敷地地図を描画
     site_shps = Shape(shape_path)
-    output_with_color("drawing shapes", "g")
+    output_with_color("drawing polygons", "g")
     for poly_categ in [site_shps.bldg]:
         # 地図のbbox内に存在するもののみを取り出して描画
         poly_inbbox = []
@@ -136,6 +144,7 @@ def visualize_route(args, text_step=10):
             coll = PolyCollection(poly_inbbox, facecolor=(0.9, 0.9, 0.9))
             ax.add_collection(coll)
 
+    output_with_color("drawing polylines", "g")
     for line_categ in [site_shps.road, site_shps.side]:
         # 地図のbbox内に存在するもののみを取り出して描画
         for l in tqdm(line_categ):
@@ -145,7 +154,7 @@ def visualize_route(args, text_step=10):
     bbox.apply_margin()
     ax.set_xlim([bbox.min_x, bbox.max_x])
     ax.set_ylim([bbox.min_y, bbox.max_y])
-    ax.legend(loc="upper right")
+    # ax.legend(loc="upper right")
     ax.set_aspect("equal")
     plt.show()
 
@@ -241,9 +250,11 @@ if __name__ == "__main__":
 
     # 各コマンドの設定
     vis_parser = subparsers.add_parser("vis", parents=[parent_parser])
-    vis_parser.add_argument("--num", action="store_true")
-    vis_parser.add_argument("--start", type=int)
-    vis_parser.add_argument("--road", action="store_true")
+    vis_parser.add_argument("--num", action="store_true", help="移動経路に番号を表示する")
+    vis_parser.add_argument("--start", type=int, default=0, help="経路を表示開始する番号")
+    vis_parser.add_argument("--road", action="store_true", help="道路だけを地図に表示する")
+    vis_parser.add_argument("--all", action="store_true", help="分割後のルートをすべて扱う")
+
     vis_parser.set_defaults(handler=visualize_route)
 
     split_parser = subparsers.add_parser("split", parents=[parent_parser])
