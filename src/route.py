@@ -1,6 +1,5 @@
 import argparse
 import json
-import random
 from contextlib import ExitStack
 from pathlib import Path
 
@@ -13,18 +12,6 @@ from tqdm import tqdm, trange
 from geometry.shapes import Shape
 from utils.tool import parse_gps_data
 from utils.color_output import output_with_color
-
-def _create_random_color(n):
-    """0から1で表現されたrgbをn個もつリストを返却
-
-    Args:
-        n (int): 要素数
-
-    Returns:
-        list[list]: rgbの数
-    """
-    color = [random.randint(0, 1) for _ in range(3)]
-    return [color for i in range(n)]
 
 
 class Mapbbox:
@@ -106,11 +93,11 @@ def visualize_route(args, text_step=10):
     date_path = Path("data", "hdf5", args.site)
     shape_path = Path("data", "shp", args.site)
     gps_path = date_path / Path("gps.hdf5")
-    site_shps = Shape(shape_path)
 
     fig = plt.figure()
     bbox = Mapbbox()
     ax = fig.add_subplot(1, 1, 1)
+
     # 移動ルートを描画
     output_with_color("drawing routes", "g")
     with h5py.File(str(gps_path), "r") as fg:
@@ -119,13 +106,13 @@ def visualize_route(args, text_step=10):
             route_coords_x = []
             route_coords_y = []
             frame_count = len(fg[date].keys())
-            for i, f in enumerate(trange(frame_count, desc=f"{date}")):
+            for f in trange(args.start, frame_count, 1, desc=f"{date}"):
                 c_x, c_y, dire, ht = parse_gps_data(fg[date][str(f)])
                 if c_x is None and c_y is None:  # 欠損値に対する処理
                     continue
                 route_coords_x.append(c_x)
                 route_coords_y.append(c_y)
-                if args.num and i % text_step == 0:  # フレーム番号を一定間隔で表示する
+                if args.num and f % text_step == 0:  # フレーム番号を一定間隔で表示する
                     ax.text(c_x, c_y, str(f), fontsize=10)
             # 各点を描画
             ax.scatter(
@@ -134,16 +121,20 @@ def visualize_route(args, text_step=10):
             bbox.update(route_coords_x, route_coords_y)
 
     # 敷地地図を描画
+    site_shps = Shape(shape_path)
     output_with_color("drawing shapes", "g")
     for poly_categ in [site_shps.bldg]:
         # 地図のbbox内に存在するもののみを取り出して描画
         poly_inbbox = []
         for p in tqdm(poly_categ):
+            if p.shape[0] == 2:  # 国土数値情報の建物情報に混じったただの直線を無視
+                continue
             if bbox.contain(Polygon(p)):
                 poly_inbbox.append(p)
 
-        coll = PolyCollection(poly_inbbox, facecolor=(0.9, 0.9, 0.9))
-        ax.add_collection(coll)
+        if args.road is False:
+            coll = PolyCollection(poly_inbbox, facecolor=(0.9, 0.9, 0.9))
+            ax.add_collection(coll)
 
     for line_categ in [site_shps.road, site_shps.side]:
         # 地図のbbox内に存在するもののみを取り出して描画
@@ -252,6 +243,8 @@ if __name__ == "__main__":
     # 各コマンドの設定
     vis_parser = subparsers.add_parser("vis", parents=[parent_parser])
     vis_parser.add_argument("--num", action="store_true")
+    vis_parser.add_argument("--start", type=int)
+    vis_parser.add_argument("--road", action="store_true")
     vis_parser.set_defaults(handler=visualize_route)
 
     split_parser = subparsers.add_parser("split", parents=[parent_parser])
