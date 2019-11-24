@@ -46,11 +46,11 @@ def replay_movie(args):
     color_path = Path("data", "hdf5", args.site, "color.hdf5")
     depth_path = Path("data", "hdf5", args.site, "depth.hdf5")
 
-    with h5py.File(str(color_path), "a") as fc, h5py.File(str(depth_path), "a") as fd:
+    with h5py.File(str(color_path), "r") as fc, h5py.File(str(depth_path), "r") as fd:
         color_group = fc[args.date]
         depth_group = fd[args.date]
 
-        for i in range(len(color_group)):
+        for i in color_group.keys():
             # ベクトル化したデータをもとの配列の形に戻す
             color_frame = np.rot90(array_to_3dim(color_group[str(i)]))
             depth_frame = np.rot90(array_to_3dim(depth_group[str(i)]))
@@ -80,6 +80,7 @@ def replay_movie(args):
             key = cv2.waitKey(1) & 0xFF
             # qキーを押したら終了
             if key == ord("q"):
+                cv2.imwrite("data/frame.jpg", images)
                 print(i)
                 exit()
 
