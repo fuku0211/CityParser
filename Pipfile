@@ -23,6 +23,9 @@ pyrealsense2 = "*"
 black = "*"
 flake8 = "*"
 pyserial = "*"
+gpxpy = "*"
+shapely = "*"
+termcolor = "*"
 
 [requires]
 python_version = "3.6"
