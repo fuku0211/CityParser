@@ -48,17 +48,13 @@ def parse_gps_data(gpsdata):
 
 # Create points:
 with h5py.File(
-    "C:\\Laboratory\\model\\distro_analyzer\\data\\hdf5\\test\\gps.hdf5", "r"
+    "C:\\Laboratory\\model\\distro_analyzer\\data\\hdf5\\daizawa_4\\gps.hdf5", "r"
 ) as f:
-    group_a = f["20191112_142615_a"]
-    group_b = f["20191112_142615_b"]
+    group_a = f["20191121_114900"]
 
     for i in range(len(group_a.keys())):
         lat, lon = parse_gps_data(group_a[str(i)])
         gpx_segment_a.points.append(gpxpy.gpx.GPXTrackPoint(lat, lon))
-    for i in range(len(group_b.keys())):
-        lat, lon = parse_gps_data(group_b[str(i)])
-        gpx_segment_b.points.append(gpxpy.gpx.GPXTrackPoint(lat, lon))
 
 # You can add routes and waypoints, too...
 px_file_w.write(gpx.to_xml(version="1.1"))
