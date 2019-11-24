@@ -5,10 +5,24 @@
     "version": "0.2.0",
     "inputs": [
         {
-            "type": "promptString",
+            "type": "pickString",
             "id": "date",
             "description": "date of file",
-            "default": "20191112_142615_a"
+            // "default": "20191112_142615_a"
+            "options": [
+                "20191112_142615_a",
+                "20191121_114900"
+            ]
+        },
+        {
+            "type": "pickString",
+            "id": "site",
+            "description": "site of file",
+            // "default": "daizawa_4"
+            "options": [
+                "test",
+                "daizawa_4"
+            ]
         }
     ],
     "configurations": [
@@ -27,9 +41,9 @@
             "args": [
                 "segment",
                 "-s",
-                "20191001_1536",
-                "-e",
-                "20191001_1541"
+                "${input:site}",
+                "-d",
+                "${input:date}"
             ],
             "console": "integratedTerminal"
         },
@@ -41,7 +55,7 @@
             "args": [
                 "replay",
                 "-s",
-                "test",
+                "${input:site}",
                 "-d",
                 "${input:date}"
             ],
@@ -55,9 +69,24 @@
             "args": [
                 "create",
                 "-s",
-                "test",
+                "${input:site}",
                 "-d",
                 "${input:date}",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "pointcloud create all",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/pointcloud.py",
+            "args": [
+                "create",
+                "-s",
+                "${input:site}",
+                "-d",
+                "${input:date}",
+                "--all"
             ],
             "console": "integratedTerminal"
         },
@@ -69,7 +98,7 @@
             "args":[
                 "cluster",
                 "-s",
-                "test",
+                "${input:site}",
                 "-d",
                 "${input:date}",
                 "-m",
@@ -95,7 +124,7 @@
             "args": [
                 "replay",
                 "--site",
-                "test",
+                "${input:site}",
                 "--date",
                 "${input:date}"
             ],
@@ -109,7 +138,7 @@
             "args": [
                 "record",
                 "--site",
-                "test"
+                "${input:site}"
             ],
             "console": "integratedTerminal"
         },
@@ -122,7 +151,7 @@
             "args": [
                 "vis",
                 "-s",
-                "test",
+                "${input:site}",
                 "-d",
                 "${input:date}"
             ]
@@ -135,7 +164,7 @@
             "args": [
                 "split",
                 "-s",
-                "test",
+                "${input:site}",
                 "-d",
                 "${input:date}"
             ]
