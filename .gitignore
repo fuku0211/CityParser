@@ -3,3 +3,4 @@ data/
 recap/
 __pycache__/
 *.pts
+*.gpx
