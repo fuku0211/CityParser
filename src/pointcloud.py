@@ -19,6 +19,7 @@ from utils.tool import (
     parse_gps_data,
     random_colors,
 )
+from utils.color_output import output_with_color
 
 
 class Frame:
@@ -46,37 +47,71 @@ def create_pcd(args):
         if args.with_seg:
             fs = stack.enter_context(h5py.File(str(seg_path), "r"))
 
-        points = []
-        colors = []
-        for route in tqdm(args.date, desc="whole"):
+        if args.all is True:  # 分割後のルートを処理する場合
+            routes = [i for i in fg.keys() if args.date[0] + "_" in i]
+        else:
+            routes = args.date
+
+        output_with_color("creating point cloud")
+        for route in tqdm(routes, desc="whole"):
+            points = []
+            colors = []
             color_group = fc[route]
             depth_group = fd[route]
             gps_group = fg[route]
             if args.with_seg:
                 seg_group = fs[route]
 
-            # フレームごとに点群を作成し座標情報と色情報を取り出す
-            frame_count = len(color_group.keys())
-            for f in trange(0, frame_count, 1, desc=f"route : {route}", leave=False):
+            frame_keys = list(map(int, fg[route].keys()))
+            frame_keys.sort()
+            iter_idx = iter(range(len(frame_keys)))
+            for f in tqdm(iter_idx, desc=route, leave=False):
                 # 進行方向を求めるために2つのフレームのGPS情報を解析する
                 try:
-                    gps_from = parse_gps_data(gps_group[str(f)])
-                    gps_to = parse_gps_data(gps_group[str(f + 1)])
-                except KeyError:  # 最後のフレームは方向を決められないので削除
+                    gps_from = parse_gps_data(gps_group[str(frame_keys[f])])
+                    gps_to = parse_gps_data(gps_group[str(frame_keys[f + 1])])
+                except IndexError:  # 最後のフレームは方向を決められないので削除
                     break
-                if None in gps_from[0:2] + gps_to[0:2]:  # gps座標が取得できていなかった場合スキップ
+
+                # gpsデータが取得できていなかった場合スキップ
+                if None in gps_from[0:2] + gps_to[0:2]:
                     continue
 
+                # sectionの切り替わりの位置だった場合スキップ
+                if frame_keys[f + 1] - frame_keys[f] != 1:
+                    continue
+
+                # gps座標が同じ場合進行方向がわからないので、違う位置を指すまでイテレータを進める
+                new_idx = 0
+                if gps_from[0:2] == gps_to[0:2]:
+                    skip = 1
+                    while True:
+                        new_idx = f + 1 + skip
+                        try:
+                            gps_to = parse_gps_data(gps_group[str(frame_keys[new_idx])])
+                        except IndexError:
+                            break
+                        if gps_from[0:2] != gps_to[0:2]:
+                            break
+                        skip += 1
+                        next(iter_idx)
+
+                # イテレータを進める間に最後のフレームに到達した場合は終了
+                if new_idx == len(frame_keys):
+                    break
+
                 # frameオブジェクトを作成する
-                color_frame = array_to_3dim(color_group[str(f)])
-                depth_frame = array_to_3dim(depth_group[str(f)])
+                color_frame = array_to_3dim(color_group[str(frame_keys[f])])
+                depth_frame = array_to_3dim(depth_group[str(frame_keys[f])])
                 frame = Frame(depth_frame, color_frame, gps_from, gps_to)
                 if args.with_seg:
                     frame.seg = array_to_3dim(seg_group[str(f)])
 
                 # 点群の座標と色を取得する
                 if args.front:
-                    point, color = _create_pcd_from_frame(frame, front=True, voxel=args.voxel)
+                    point, color = _create_pcd_from_frame(
+                        frame, front=True, voxel=args.voxel
+                    )
                 else:
                     point, color = _create_pcd_from_frame(frame, voxel=args.voxel)
                 points.append(point)
@@ -85,7 +120,7 @@ def create_pcd(args):
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(np.concatenate(points, axis=0))
             pcd.colors = o3d.utility.Vector3dVector(np.concatenate(colors, axis=0))
-            # segmentation結果を使っていない点群は別ファイルに保存
+            # ルートのフォルダに結果を保存する
             route_path = Path("data", "pts", args.site, route)
             route_path.mkdir(parents=True, exist_ok=True)
             if args.with_seg:
@@ -95,7 +130,7 @@ def create_pcd(args):
             o3d.io.write_point_cloud(str(file_path), pcd)
 
 
-def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False):
+def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False, rev=12):
     x, y, _, ht = frame.gps_from
     x_to, y_to, _, _ = frame.gps_to
 
@@ -131,7 +166,9 @@ def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False):
         pcd = pcd.rotate([0, math.radians(-90 - math.degrees(dire)), 0], center=False)
     else:
         # pcd = pcd.rotate([0, 0, math.pi])
-        pcd = pcd.rotate([0, -math.pi - dire, math.pi / 2], center=False)
+        pcd = pcd.rotate(
+            [0, -math.pi - dire, math.pi / 2 + math.radians(rev)], center=False
+        )
 
     pts = np.asarray(pcd.points)
     pts = pts[:, [2, 0, 1]]  # open3dはy-up,pyplotはz-upの座標なのでyとzを入れ替えておく
@@ -226,9 +263,10 @@ if __name__ == "__main__":
     # createコマンドの動作
     create_parser = subparsers.add_parser("create", parents=[parent_parser])
     create_parser.add_argument("-d", "--date", nargs="*", required=True)
+    create_parser.add_argument("--voxel", type=float, default=0.1)
     create_parser.add_argument("--with_seg", action="store_true")
-    create_parser.add_argument("--voxel", default=0.1)
     create_parser.add_argument("--front", action="store_true")
+    create_parser.add_argument("--all", action="store_true")
     create_parser.set_defaults(handler=create_pcd)
 
     clus_parser = subparsers.add_parser("cluster", parents=[parent_parser])
