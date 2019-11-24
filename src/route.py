@@ -250,8 +250,8 @@ if __name__ == "__main__":
 
     # 各コマンドの設定
     vis_parser = subparsers.add_parser("vis", parents=[parent_parser])
-    vis_parser.add_argument("--num", action="store_true", help="移動経路に番号を表示する")
     vis_parser.add_argument("--start", type=int, default=0, help="経路を表示開始する番号")
+    vis_parser.add_argument("--num", action="store_true", help="移動経路に番号を表示する")
     vis_parser.add_argument("--road", action="store_true", help="道路だけを地図に表示する")
     vis_parser.add_argument("--all", action="store_true", help="分割後のルートをすべて扱う")
 
