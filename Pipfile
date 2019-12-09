@@ -7,6 +7,7 @@ verify_ssl = true
 
 [packages]
 tensorflow = "==1.15"
+shapely = "==1.6.4"
 cupy-cuda100 = "*"
 h5py = "*"
 matplotlib = "*"
@@ -24,8 +25,8 @@ black = "*"
 flake8 = "*"
 pyserial = "*"
 gpxpy = "*"
-shapely = "*"
 termcolor = "*"
+plotly = "==2.7.0"
 
 [requires]
 python_version = "3.6"

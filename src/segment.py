@@ -74,14 +74,18 @@ def inference_from_hdf5(args):
 
     model = create_model(args)
     with h5py.File(str(color_path), "r") as fc, h5py.File(str(seg_path), "a") as fs:
-        for date in tqdm(args.date, desc="all"):
-            color_group = fc[date]
-            if date in fs.keys():
-                del fs[date]
-            seg_group = fs.create_group(date)
+        if args.all is True: # 分割後のルートを処理する場合
+            routes = [i for i in fc.keys() if args.date[0] + "_" in i]
+        else:
+            routes = args.date
 
-            frame_count = len(color_group.keys())
-            for i in tqdm(range(frame_count), desc=f"date : {date}", leave=False):
+        for route in tqdm(routes, desc="all"):
+            color_group = fc[route]
+            if route in fs.keys():
+                del fs[route]
+            seg_group = fs.create_group(route)
+
+            for i in tqdm(color_group.keys(), desc=f"route : {route}", leave=False):
                 # フレームを読み込んでセグメンテーションできるようにリサイズする
                 img = array_to_3dim(color_group[str(i)])
                 img = Image.fromarray(img)
@@ -108,18 +112,20 @@ def replay_segment(args):
     with h5py.File(str(color_path), "r") as fc, h5py.File(str(seg_path), "r") as fs:
         color_group = fc[args.date]
         seg_group = fs[args.date]
-        frame_count = len(color_group.keys())
-        for i in range(frame_count):
-            seg_frame = array_to_3dim(seg_group[str(i)])
-            color_frame = array_to_3dim(color_group[str(i)])
+        for i in color_group.keys():
+            seg_frame = np.rot90(array_to_3dim(seg_group[str(i)]))
+            color_frame = np.rot90(array_to_3dim(color_group[str(i)]))
+            color_frame = cv2.cvtColor(color_frame, cv2.COLOR_BGR2RGB)
+
             # boolをintにして*8することで植物の部分が8になるようにする
             seg_frame = seg_frame * 8
             seg_frame = label_to_color_image(seg_frame)
             seg_frame = Image.fromarray(seg_frame)
             color_frame = Image.fromarray(color_frame)
             mix_frame = Image.blend(color_frame, seg_frame, 0.7)
-            mix_frame = cv2.cvtColor(np.asarray(mix_frame), cv2.COLOR_BGR2RGB)
-            cv2.imshow("RealSense", mix_frame)
+            out_frame = np.hstack((np.asarray(color_frame), np.asarray(mix_frame)))
+            out_frame = cv2.cvtColor(out_frame, cv2.COLOR_RGB2BGR)
+            cv2.imshow("RealSense", out_frame)
             key = cv2.waitKey(1) & 0xFF
 
             sleep(0.1)
@@ -127,7 +133,7 @@ def replay_segment(args):
             # qキーを押したら終了
             if key == ord("q"):
                 cv2.destroyAllWindows()
-                cv2.imwrite("data/frame.jpg", mix_frame)
+                cv2.imwrite("data/frame.jpg", out_frame)
                 exit()
 
 
@@ -141,6 +147,7 @@ if __name__ == "__main__":
     inf_parser = subparsers.add_parser("inference", parents=[parent_parser])
     inf_parser.add_argument("-d", "--date", required=True, nargs="*")
     inf_parser.add_argument("--model", type=int, default=0)
+    inf_parser.add_argument("--all", action="store_true")
     inf_parser.set_defaults(handler=inference_from_hdf5)
 
     play_parser = subparsers.add_parser("replay", parents=[parent_parser])

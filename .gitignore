@@ -4,3 +4,4 @@ recap/
 __pycache__/
 *.pts
 *.gpx
+src/test/binary/
