@@ -196,7 +196,7 @@ class Route:
     Attributes
     ----------
     json_path : Path
-        config.jsonのパス
+        section.jsonのパス
     depth_path : Path
         depth.hdf5のパス
     color_path : Path
@@ -211,8 +211,8 @@ class Route:
 
         Parameters
         ----------
-        json_path : config.jsonのパス
-            config.jsonのパス
+        json_path : section.jsonのパス
+            section.jsonのパス
         hdf5_path : Path
             hdf5フォルダ内の敷地フォルダのディレクトリ
         seg : bool, optional
@@ -288,7 +288,7 @@ def extract_routes(args):
     """configファイルをもとにルートを抽出する
 
     """
-    json_path = Path("data", "json", args.site, "config.json")
+    json_path = Path("data", "json", args.site, "section.json")
     hdf5_path = Path("data", "hdf5", args.site)
 
     if args.with_seg:
