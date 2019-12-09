@@ -32,6 +32,11 @@ class Frame:
 
 
 def create_pcd(args):
+    """点群を作成する
+
+    Args:
+        args (argparse.Namespace): コマンドライン引数
+    """
     hdf5_path = Path("data", "hdf5", args.site)
     color_path = hdf5_path / Path("color.hdf5")
     depth_path = hdf5_path / Path("depth.hdf5")
@@ -105,7 +110,7 @@ def create_pcd(args):
                 depth_frame = array_to_3dim(depth_group[str(frame_keys[f])])
                 frame = Frame(depth_frame, color_frame, gps_from, gps_to)
                 if args.with_seg:
-                    frame.seg = array_to_3dim(seg_group[str(f)])
+                    frame.seg = array_to_3dim(seg_group[str(frame_keys[f])])
 
                 # 点群の座標と色を取得する
                 if args.front:
@@ -116,6 +121,19 @@ def create_pcd(args):
                     point, color = _create_pcd_from_frame(frame, voxel=args.voxel)
                 points.append(point)
                 colors.append(color)
+
+                # TEST: テスト用点群生成
+                # if 100 <= f <= 110:
+                #     pcd = o3d.geometry.PointCloud()
+                #     point[:, 0] += 14900
+                #     point[:, 1] += 39000
+                #     pcd.points = o3d.utility.Vector3dVector(point)
+                #     pcd.colors = o3d.utility.Vector3dVector(color)
+                #     pcd.estimate_normals(fast_normal_computation=False)
+                #     file_path = Path("src", "test", "binary", f"{f}.pcd")
+                #     o3d.io.write_point_cloud(str(file_path), pcd)
+                #     if f == 110:
+                #         exit()
 
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(np.concatenate(points, axis=0))
@@ -144,7 +162,7 @@ def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False, rev=12):
 
     color = o3d.geometry.Image(frame.color)
     rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
-        color, depth, depth_trunc=7, convert_rgb_to_intensity=False, depth_scale=1000
+        color, depth, depth_trunc=10, convert_rgb_to_intensity=False, depth_scale=1000
     )
 
     # x軸方向が北として平面座標上に点群を配置する
@@ -182,19 +200,19 @@ def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False, rev=12):
         )
         o3d.visualization.draw_geometries([pcd, mesh_frame])
 
-    return (pts, colors)
+    return pts, colors
 
 
 def cluster_pcd(args):
+    output_with_color("start clustering")
     site_path = Path("data", "pts", args.site)
     dates = [i.name for i in site_path.iterdir()]
-    for route in dates:
-        print(f"route: {route}")
+    for route in tqdm(dates):
         load_path = site_path / Path(route, "segmentation.pts")
         load_pcd = o3d.io.read_point_cloud(str(load_path))
         result_pcd = o3d.geometry.PointCloud()
 
-        labels = list(load_pcd.cluster_dbscan(0.3, 3, True))
+        labels = list(load_pcd.cluster_dbscan(0.3, 150))
 
         pts = np.asarray(load_pcd.points)
         noiseless = [pts[i, :] for i in range(pts.shape[0]) if labels[i] != -1]
@@ -205,6 +223,21 @@ def cluster_pcd(args):
 
         save_path = site_path / Path(route, "clustering.pts")
         o3d.io.write_point_cloud(str(save_path), result_pcd)
+
+        # クラスタリング結果のptsファイルの3列目にクラスタのインデックスを書き込む
+        label_noiseless = [i for i in labels if i != -1]
+        with open(save_path, "rb") as f:
+            lines = f.readlines()
+            lines[0] = "x y z cluster r g b\r\r\n".encode("utf-8")
+            for i, line in enumerate(lines):
+                if i == 0:
+                    continue
+                split_line = line.split()
+                split_line[3] = f"{label_noiseless[i - 1]}".encode("utf-8")
+                split_line[6] += "\r\r\n".encode("utf-8")
+                lines[i] = b" ".join(split_line)
+        with open(save_path, "wb") as f:
+            f.writelines(lines)
 
         # start = time()
         # # クラスタリング手法によって分岐
