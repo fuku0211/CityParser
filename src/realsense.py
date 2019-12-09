@@ -17,6 +17,13 @@ from utils.tool import array_to_3dim
 
 
 def stream_realsense(args):
+    """接続しているrealsenseを起動する
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        コマンドライン引数
+    """
     cap = RealsenseCapture()
     cap.start()
     while True:
@@ -43,6 +50,13 @@ def stream_realsense(args):
 
 
 def replay_movie(args):
+    """録画を再生する
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        コマンドライン引数
+    """
     color_path = Path("data", "hdf5", args.site, "color.hdf5")
     depth_path = Path("data", "hdf5", args.site, "depth.hdf5")
 
@@ -86,6 +100,13 @@ def replay_movie(args):
 
 
 def record_realsense_with_gps(args):
+    """接続しているRealsenseとDG-PRO1RWでGPS情報が付随したhdf5ファイルを作成する
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        コマンドライン引数
+    """
     global gps_data
     global gps_frag
     with serial.Serial("COM6", 230400) as ser:  # GPSのポート指定
@@ -141,6 +162,13 @@ def record_realsense_with_gps(args):
 
 
 def _extract_gps_data(ser):
+    """gpsデータを解析して必要な部分を取り出す
+
+    Notes
+    ----------
+    取り出したデータでグローバル変数のgps_dataを更新し続ける
+    gps_fragがFalseになるまで処理が続く
+    """
     global gps_data
     global gps_frag
     frag_rmc, frag_vtg, frag_gga = [False, False, False]
@@ -202,10 +230,12 @@ if __name__ == "__main__":
     stream_parser = subparsers.add_parser("stream")
     stream_parser.set_defaults(handler=stream_realsense)
 
+    # recordコマンドの動作
     record_parser = subparsers.add_parser("record")
     record_parser.add_argument("-s", "--site", required=True)
     record_parser.set_defaults(handler=record_realsense_with_gps)
 
+    # replayコマンドの動作
     replay_parser = subparsers.add_parser("replay")
     replay_parser.add_argument("-s", "--site", required=True)
     replay_parser.add_argument("-d", "--date", required=True)

@@ -6,7 +6,27 @@ from utils.color_output import output_with_color
 
 
 class Shape:
+    """shapeファイルを読み込んだ情報を格納
+
+    Attributes
+    ----------
+    path : Path
+        shapeファイルのパス
+    bldg : list
+        建物の輪郭線座標
+    road : list
+        道路の輪郭線座標
+    side : list
+        歩道の輪郭線座標
+    """
     def __init__(self, shp_path):
+        """
+
+        Parameters
+        ----------
+        shp_path : Path
+            shapeファイルのパス
+        """
         self.path = shp_path
         output_with_color("loading shape file", "g")
         self.bldg = self._load_parts("tatemono.shp")
@@ -14,6 +34,18 @@ class Shape:
         self.side = self._load_parts("hodou.shp")
 
     def _load_parts(self, file_name):
+        """shapeファイルからラインの座標を読み込む
+
+        Parameters
+        ----------
+        file_name : str
+            ファイル名
+
+        Returns
+        -------
+        list
+            ラインの座標値
+        """
         file_path = self.path / Path(file_name)
 
         shp_points_all = []

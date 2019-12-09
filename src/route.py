@@ -15,12 +15,21 @@ from utils.color_output import output_with_color
 
 
 class Mapbbox:
-    """地図の表示領域を制御するクラス
+    """地図の表示領域を保持する
 
-    Returns:
-        Mapbbox
+    Attributes
+    ----------
+    min_x : float
+        xの最小値
+    min_y : float
+        yの最小値
+    max_x : float
+        xの最大値
+    max_y : float
+        yの最大値
+    polygon : Polygon
+        オブジェクトが地図領域内にあるか判定するために使う
     """
-
     def __init__(self):
         self.min_x = None
         self.min_y = None
@@ -29,13 +38,15 @@ class Mapbbox:
         self.polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
 
     def update(self, coords_x, coords_y):
-        """引数の点がbounding boxの外側にあるとき、その点が含まれるようにbounding boxの境界の値を調整する
+        """引数の点がbounding boxの外側にある時、その点が含まれるようにbounding boxの境界の値を調整する
 
-        Args:
-            coords_x (list[float]): x座標のリスト
-            coords_y (list[float]): y座標のリスト
+        Parameters
+        ----------
+        coords_x : list
+            x座標のリスト
+        coords_y : list
+            y座標のリスト
         """
-
         min_x = min(coords_x)
         min_y = min(coords_y)
         max_x = max(coords_x)
@@ -72,11 +83,10 @@ class Mapbbox:
     def apply_margin(self, rate=0.1):
         """bboxの境界を余白を含めた値に変更する
 
-        Args:
-            rate (float, optional): 幅全体に対する余白の割合. Defaults to 0.1.
-
-        Returns:
-            (tuple(float)): (min_x, min_y, max_x, max_y)
+        Parameters
+        ----------
+        rate : float, optional
+            幅全体に対する余白の割合, by default 0.1
         """
         offset_x = (self.max_x - self.min_x) * rate
         offset_y = (self.max_y - self.min_y) * rate
@@ -86,10 +96,31 @@ class Mapbbox:
         self.max_y += offset_y
 
     def contain(self, geometry):
+        """地図内にオブジェクトが含まれるか判定する
+
+        Parameters
+        ----------
+        geometry : Polygon
+            判定するオブジェクト
+
+        Returns
+        -------
+        bool
+            含む場合True
+        """
         return self.polygon.contains(geometry)
 
 
 def visualize_route(args, text_step=10):
+    """歩いたルートを描画する
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        コマンドライン引数
+    text_step : int, optional
+        フレーム数の表示の間隔, by default 10
+    """
     date_path = Path("data", "hdf5", args.site)
     shape_path = Path("data", "shp", args.site)
     gps_path = date_path / Path("gps.hdf5")
@@ -160,7 +191,33 @@ def visualize_route(args, text_step=10):
 
 
 class Route:
+    """ルート処理を格納する
+
+    Attributes
+    ----------
+    json_path : Path
+        config.jsonのパス
+    depth_path : Path
+        depth.hdf5のパス
+    color_path : Path
+        color.hdf5のパス
+    gps_path : Path
+        gps.hdf5のパス
+    seg_path : Path
+        seg.hdf5のパス
+    """
     def __init__(self, json_path, hdf5_path, seg=False):
+        """
+
+        Parameters
+        ----------
+        json_path : config.jsonのパス
+            config.jsonのパス
+        hdf5_path : Path
+            hdf5フォルダ内の敷地フォルダのディレクトリ
+        seg : bool, optional
+            セグメンテーションファイルも対象にするか, by default False
+        """
         self.json_path = json_path
         self.depth_path = hdf5_path / Path("depth.hdf5")
         self.color_path = hdf5_path / Path("color.hdf5")
@@ -168,10 +225,12 @@ class Route:
         self.seg_path = hdf5_path / Path("seg.hdf5") if seg else None
 
     def extract_routes_from_config(self, dates):
-        """configファイルを元に、あるルートから必要な部分だけを抽出する
+        """configファイルをもとにあるルートから必要な部分だけを抽出してhdf5ファイルに書き込む
 
-        Args:
-            dates (list[str]): 処理対象の日時
+        Parameters
+        ----------
+        dates : list
+            処理対象の日時
         """
         with ExitStack() as stack:
             fj = stack.enter_context(open(self.json_path, "r"))
@@ -254,9 +313,9 @@ if __name__ == "__main__":
     vis_parser.add_argument("--num", action="store_true", help="移動経路に番号を表示する")
     vis_parser.add_argument("--road", action="store_true", help="道路だけを地図に表示する")
     vis_parser.add_argument("--all", action="store_true", help="分割後のルートをすべて扱う")
-
     vis_parser.set_defaults(handler=visualize_route)
 
+    # splitコマンドの動作
     split_parser = subparsers.add_parser("split", parents=[parent_parser])
     split_parser.add_argument("--with_seg", action="store_true")
     split_parser.set_defaults(handler=extract_routes)

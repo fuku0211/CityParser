@@ -12,8 +12,10 @@ from utils.color_output import output_with_color
 def parse_convex_hull_from_pcd(args):
     """点群を凸包を用いて解析し、そのヒストグラムを出力する
 
-    Args:
-        args (argparse.Namespace): コマンドライン引数
+    Parameters
+    ----------
+    args : argparse.Namespace
+        コマンドライン引数
     """
     output_with_color("parse volume")
     site_path = Path("data", "pts", args.site)

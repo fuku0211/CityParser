@@ -23,7 +23,37 @@ from utils.color_output import output_with_color
 
 
 class Frame:
+    """1フレームに関する情報を保持する.
+
+    Attributes
+    ----------
+    depth : ndarray
+        各ピクセルにおけるカメラから物体までの距離
+    color : ndarray
+        録画のRGB
+    gps_from : ndarray
+        このフレームのGPS
+    gps_to : ndarray
+        1つ先のフレームのGPS
+    seg : ndarray
+        セグメンテーション結果
+    """
     def __init__(self, depth, color, gps_from, gps_to, seg=None):
+        """1フレームに関する情報を保持する.
+
+        Parameters
+        ----------
+        depth : ndarray
+            各ピクセルにおけるカメラから物体までの距離
+        color : ndarray
+            録画のRGB
+        gps_from : ndarray
+            このフレームのGPS
+        gps_to : ndarray
+            1つ先のフレームのGPS
+        seg : ndarray, optional
+            セグメンテーション結果, by default None
+        """
         self.depth = depth
         self.color = color
         self.gps_from = gps_from
@@ -33,9 +63,15 @@ class Frame:
 
 def create_pcd(args):
     """点群を作成する
+    Parameters
+    ----------
+    args : argparse.Namespace
+        コマンドライン引数
 
-    Args:
-        args (argparse.Namespace): コマンドライン引数
+    Notes
+    ----------
+    録画のRGB情報とDepth情報(+セグメンテーション結果)とGPS情報それぞれを保存したhdf5ファイルが必要.
+
     """
     hdf5_path = Path("data", "hdf5", args.site)
     color_path = hdf5_path / Path("color.hdf5")
@@ -52,7 +88,7 @@ def create_pcd(args):
         if args.with_seg:
             fs = stack.enter_context(h5py.File(str(seg_path), "r"))
 
-        if args.all is True:  # 分割後のルートを処理する場合
+        if args.all is True:  # 分割処理した後のでーたを処理する場合
             routes = [i for i in fg.keys() if args.date[0] + "_" in i]
         else:
             routes = args.date
@@ -71,7 +107,7 @@ def create_pcd(args):
             frame_keys.sort()
             iter_idx = iter(range(len(frame_keys)))
             for f in tqdm(iter_idx, desc=route, leave=False):
-                # 進行方向を求めるために2つのフレームのGPS情報を解析する
+                # 進行方向を求めるために2つの連続したフレームのGPS情報を解析する
                 try:
                     gps_from = parse_gps_data(gps_group[str(frame_keys[f])])
                     gps_to = parse_gps_data(gps_group[str(frame_keys[f + 1])])
@@ -109,6 +145,7 @@ def create_pcd(args):
                 color_frame = array_to_3dim(color_group[str(frame_keys[f])])
                 depth_frame = array_to_3dim(depth_group[str(frame_keys[f])])
                 frame = Frame(depth_frame, color_frame, gps_from, gps_to)
+
                 if args.with_seg:
                     frame.seg = array_to_3dim(seg_group[str(frame_keys[f])])
 
@@ -149,6 +186,26 @@ def create_pcd(args):
 
 
 def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False, rev=12):
+    """1フレームをもとに点群を作成する
+
+    Parameters
+    ----------
+    frame : Frame
+        Frameオブジェクト
+    front : bool, optional
+        正面で撮影したかどうか, by default False
+    voxel : int or float, optional
+        ダウンサンプリングに用いるボクセルのサイズ, by default 0.1
+    vis : bool, optional
+        作成した点群を確認するかどうか, by default False
+    rev : int, optional
+        カメラの傾きを補正する(度数), by default 12
+
+    Returns
+    -------
+    (pts, colors) : (ndarray, ndarray)
+        点群の座標と色
+    """
     x, y, _, ht = frame.gps_from
     x_to, y_to, _, _ = frame.gps_to
 
@@ -204,27 +261,37 @@ def _create_pcd_from_frame(frame, front=False, voxel=0.1, vis=False, rev=12):
 
 
 def cluster_pcd(args):
+    """点群をクラスタリングする
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        コマンドライン引数
+    """
     output_with_color("start clustering")
     site_path = Path("data", "pts", args.site)
     dates = [i.name for i in site_path.iterdir()]
     for route in tqdm(dates):
+        # 点群のロード
         load_path = site_path / Path(route, "segmentation.pts")
         load_pcd = o3d.io.read_point_cloud(str(load_path))
-        result_pcd = o3d.geometry.PointCloud()
 
         labels = list(load_pcd.cluster_dbscan(0.3, 150))
-
         pts = np.asarray(load_pcd.points)
+
+        result_pcd = o3d.geometry.PointCloud()
+        # クラスタリングでノイズ判定された点を削除する
         noiseless = [pts[i, :] for i in range(pts.shape[0]) if labels[i] != -1]
         result_pcd.points = o3d.utility.Vector3dVector(noiseless)
-        colors = random_colors(max(labels) + 1)
-        colors = [colors[labels[i]] for i in range(pts.shape[0]) if labels[i] != -1]
+        # 同クラスタには同じ色を割り当てる
+        palette = random_colors(max(labels) + 1)
+        colors = [palette[labels[i]] for i in range(pts.shape[0]) if labels[i] != -1]
         result_pcd.colors = o3d.utility.Vector3dVector(colors)
 
         save_path = site_path / Path(route, "clustering.pts")
         o3d.io.write_point_cloud(str(save_path), result_pcd)
 
-        # クラスタリング結果のptsファイルの3列目にクラスタのインデックスを書き込む
+        # ptsファイルの3列目にクラスタのインデックスを書き込む
         label_noiseless = [i for i in labels if i != -1]
         with open(save_path, "rb") as f:
             lines = f.readlines()
@@ -302,6 +369,7 @@ if __name__ == "__main__":
     create_parser.add_argument("--all", action="store_true")
     create_parser.set_defaults(handler=create_pcd)
 
+    # clusterコマンドの動作
     clus_parser = subparsers.add_parser("cluster", parents=[parent_parser])
     clus_parser.add_argument(
         "-m", "--method", choices=["dbscan", "xmeans"], required=True

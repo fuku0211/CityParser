@@ -2,6 +2,15 @@ import termcolor
 
 
 def output_with_color(string, c="r"):
+    """ターミナル上で色付きの出力をする
+
+    Parameters
+    ----------
+    string : str
+        出力する文字
+    c : str, optional
+        "r","y","g"から色を選ぶ, by default "r"
+    """
     width = len(string) + 10 if len(string) >= 30 else 30
     output = "-" * width + "\n"
     output += "|" + string.center(width - 2, ".") + "|" + "\n"
