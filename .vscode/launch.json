@@ -99,11 +99,8 @@
                 "cluster",
                 "-s",
                 "${input:site}",
-                "-d",
-                "${input:date}",
                 "-m",
                 "dbscan",
-                "--export",
             ]
         },
         {
@@ -167,6 +164,30 @@
                 "${input:site}",
                 "-d",
                 "${input:date}"
+            ]
+        },
+        {
+            "name": "parse volume(one route)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/parse.py",
+            "args": [
+                "volume",
+                "-s",
+                "${input:site}",
+                "-d",
+                "${input:date}"
+            ]
+        },
+        {
+            "name": "parse volume(all route)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/parse.py",
+            "args": [
+                "volume",
+                "-s",
+                "${input:site}",
             ]
         }
     ]
