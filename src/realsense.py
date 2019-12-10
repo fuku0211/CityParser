@@ -64,7 +64,12 @@ def replay_movie(args):
         color_group = fc[args.date]
         depth_group = fd[args.date]
 
-        for i in color_group.keys():
+        # キーをソートするためintにキャストして戻す
+        keys = list(color_group.keys())
+        keys = list(map(int, keys))
+        keys.sort()
+        keys = list(map(str, keys))
+        for i in keys:
             # ベクトル化したデータをもとの配列の形に戻す
             color_frame = np.rot90(array_to_3dim(color_group[str(i)]))
             depth_frame = np.rot90(array_to_3dim(depth_group[str(i)]))
