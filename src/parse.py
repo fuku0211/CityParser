@@ -7,7 +7,7 @@ from scipy.spatial import ConvexHull
 from tqdm import tqdm
 
 from utils.color_output import output_with_color
-
+from geometry.shapes import Shape
 
 def parse_convex_hull_from_pcd(args):
     """点群を凸包を用いて解析し、そのヒストグラムを出力する
@@ -61,6 +61,12 @@ def parse_convex_hull_from_pcd(args):
     plt.show()
 
 
+def parse_voronoi(args):
+    shp_dir = Path("data", "shp", args.site)
+    json_dir = Path("data", "json", args.site)
+    a = Shape(shp_dir, json_dir)
+    print()
+
 if __name__ == "__main__":
     # コマンドライン用
     parser = argparse.ArgumentParser()
@@ -69,12 +75,14 @@ if __name__ == "__main__":
     # 共通の引数
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("-s", "--site", required=True)
+    parent_parser.add_argument("-d", "--date", required=True)
 
     # 各コマンドの設定
     volume_parser = subparsers.add_parser("volume", parents=[parent_parser])
-    volume_parser.add_argument("-d", "--date")
     volume_parser.set_defaults(handler=parse_convex_hull_from_pcd)
 
+    voronoi_parser = subparsers.add_parser("voronoi", parents=[parent_parser])
+    voronoi_parser.set_defaults(handler=parse_voronoi)
     args = parser.parse_args()
 
     if hasattr(args, "handler"):
