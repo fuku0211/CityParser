@@ -96,6 +96,9 @@ def replay_movie(args):
             cv2.namedWindow("RealSense", cv2.WINDOW_AUTOSIZE)
             cv2.imshow("RealSense", images)
 
+            # スピード調整
+            sleep(args.interval)
+
             key = cv2.waitKey(1) & 0xFF
             # qキーを押したら終了
             if key == ord("q"):
@@ -244,6 +247,7 @@ if __name__ == "__main__":
     replay_parser = subparsers.add_parser("replay")
     replay_parser.add_argument("-s", "--site", required=True)
     replay_parser.add_argument("-d", "--date", required=True)
+    replay_parser.add_argument("-i", "--interval", type=float, default=0)
     replay_parser.set_defaults(handler=replay_movie)
 
     args = parser.parse_args()
