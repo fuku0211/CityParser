@@ -30,6 +30,7 @@ class Mapbbox:
     polygon : Polygon
         オブジェクトが地図領域内にあるか判定するために使う
     """
+
     def __init__(self):
         self.min_x = None
         self.min_y = None
@@ -122,9 +123,12 @@ def visualize_route(args, text_step=10):
         フレーム数の表示の間隔, by default 10
     """
     date_path = Path("data", "hdf5", args.site)
+    gps_path = date_path / Path("gps.hdf5")
     shape_path = Path("data", "shp", args.site)
     json_path = Path("data", "json", args.site)
-    gps_path = date_path / Path("gps.hdf5")
+    with open(json_path / Path("config.json")) as f:
+        file = json.load(f)
+        black_list = file["blacklist"]
 
     fig = plt.figure()
     bbox = Mapbbox()
@@ -139,8 +143,15 @@ def visualize_route(args, text_step=10):
     bbox.update(site_coords_x, site_coords_y)
     bbox.apply_margin()
     # 敷地の描画
-    site = PolyCollection([site_shps.site], facecolor=(0.9, 0.9, 0.9))
-    ax.add_collection(site)
+    for i, code in enumerate(site_shps.gcode):
+        if code in black_list:
+            ax.add_collection(
+                PolyCollection([site_shps.block[i]], facecolor=(0.95, 0.8, 0.8))
+            )
+        else:
+            ax.add_collection(
+                PolyCollection([site_shps.block[i]], facecolor=(0.8, 0.95, 0.8))
+            )
 
     # ポリラインの描画
     output_with_color("drawing polylines", "g")
@@ -165,11 +176,10 @@ def visualize_route(args, text_step=10):
             coll = PolyCollection(poly_inbbox, facecolor=(0.3, 0.3, 0.3))
             ax.add_collection(coll)
 
-
     # 移動ルートを描画
     output_with_color("drawing routes", "g")
     with h5py.File(str(gps_path), "r") as fg:
-        if args.all is True: # 分割後のルートを処理する場合
+        if args.all is True:  # 分割後のルートを処理する場合
             routes = [i for i in fg.keys() if args.date[0] + "_" in i]
         else:
             routes = args.date
@@ -191,9 +201,7 @@ def visualize_route(args, text_step=10):
                 if args.num and f % text_step == 0:  # フレーム番号を一定間隔で表示する
                     ax.text(c_x, c_y, str(f), fontsize=10)
             # 各点を描画
-            ax.scatter(
-                route_coords_x, route_coords_y, s=10, label=route, zorder=2
-            )
+            ax.scatter(route_coords_x, route_coords_y, s=10, label=route, zorder=2)
 
     ax.set_xlim([bbox.min_x, bbox.max_x])
     ax.set_ylim([bbox.min_y, bbox.max_y])
@@ -218,6 +226,7 @@ class Route:
     seg_path : Path
         seg.hdf5のパス
     """
+
     def __init__(self, json_path, hdf5_path, seg=False):
         """
 

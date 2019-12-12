@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import shapefile
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, LineString
 from shapely.ops import cascaded_union
 from tqdm import tqdm
 
@@ -42,10 +42,15 @@ class Shape:
         self.shp_dir = shp_dir
         self.json_dir = json_dir
         output_with_color("loading shape file", "g")
+        # 敷地と街区を読み込む
+        self.site = None
+        self.block = None
+        self.gcode = None
+        self._load_site_and_blocks_with_gcode()
+
         self.bldg = self._load_parts("tatemono.shp")
         self.road = self._load_parts("road.shp")
         self.side = self._load_parts("hodou.shp")
-        self.site = self._load_site_boundary()
 
     def _load_parts(self, file_name):
         """shapeファイルからラインの座標を読み込む
@@ -65,39 +70,40 @@ class Shape:
         shp_points_all = []
         with shapefile.Reader(str(file_path)) as src:
             shps = src.shapes()
-            for shp in tqdm(shps, desc=f"{file_name}"):
-                # 線の内部に線がある場合は外の線と中の線を区別する
-                if len(shp.parts) > 1:
-                    parts_idx = shp.parts.append(len(shp.points) - 1)
-                    for i in range(0, len(shp.points) - 1, 2):
-                        shp_points_all.append(
-                            shp.points[parts_idx[i] : parts_idx[i + 1]]
-                        )
-                else:
-                    shp_points_all.append(np.asarray(shp.points, dtype="float32"))
+            if shps[0].shapeType == 5:
+                for shp in tqdm(shps, desc=f"{file_name}"):
+                    if Polygon(shp.points).intersects(Polygon(self.site)):
+                        shp_points_all.append(np.asarray(shp.points))
+            else:
+                for shp in tqdm(shps, desc=f"{file_name}"):
+                    if LineString(shp.points).intersects(Polygon(self.site)):
+                        shp_points_all.append(np.asarray(shp.points))
+
         return shp_points_all
 
-    def _load_site_boundary(self):
+    def _load_site_and_blocks_with_gcode(self):
         shp_path = self.shp_dir / Path("gaiku.shp")
-        json_path = self.json_dir / Path("config.json")
-        # shapeファイルとjsonファイルを開く
+        # shapeファイルを開く
         with ExitStack() as stack:
             fp = stack.enter_context(shapefile.Reader(str(shp_path)))
-            fj = stack.enter_context(open(json_path, "r"))
-            shps = fp.shapes()
-            rcds = fp.records()
-            configs = json.load(fj)
+            blocks_parts = [i.points for i in fp.shapes()]
+            records = fp.records()
 
-        # 敷地内の街区とそのレコードを取り出す
-        shps_in_site = []
-        rcds_in_site = []
-        for i, r in enumerate(rcds):
-            if r["acode"] == configs["acode"] and r["ccode"] == configs["ccode"]:
-                shp = Polygon(shps[i].points)
-                shps_in_site.append(shp)
-                rcds_in_site.append(rcds[i])
-        site = cascaded_union(shps_in_site)
-        return np.asarray(site.exterior.coords)
+        # gcodeが同じポリゴンをまとめる
+        gcodes = [i["gcode"] for i in records]
+        gcodes_set = list(set(gcodes))
+        blocks_joined = []
+        for code in gcodes_set:
+            block_idx = [i for i, x in enumerate(gcodes) if x == code]
+            marge_shp = [Polygon(blocks_parts[i]) for i in block_idx]
+            if len(marge_shp) == 1:
+                marged_block = marge_shp[0]
+            else:
+                marged_block = cascaded_union(marge_shp)
+            block_coords = np.asarray(marged_block.exterior.coords)
+            blocks_joined.append(block_coords)
 
-    def _load_block(self):
-        pass
+        site = cascaded_union([Polygon(i) for i in blocks_joined])
+        self.site = np.asarray(site.exterior.coords)
+        self.block = blocks_joined
+        self.gcode = gcodes_set
