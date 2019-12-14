@@ -9,7 +9,7 @@ from matplotlib.collections import PolyCollection
 from shapely.geometry import LineString, Polygon
 from tqdm import tqdm, trange
 
-from geometry.shapes import Shape
+from geometry.shapes import ShapeCollection
 from utils.tool import parse_gps_data
 from utils.color_output import output_with_color
 
@@ -128,14 +128,17 @@ def visualize_route(args, text_step=10):
     json_path = Path("data", "json", args.site)
     with open(json_path / Path("config.json")) as f:
         file = json.load(f)
-        black_list = file["blacklist"]
+        try:
+            black_list = file["blacklist"]
+        except KeyError:
+            black_list = []
 
     fig = plt.figure()
     bbox = Mapbbox()
     ax = fig.add_subplot(1, 1, 1)
 
     # 敷地地図を描画
-    site_shps = Shape(shape_path, json_path)
+    site_shps = ShapeCollection(shape_path, json_path)
 
     # 敷地が入るように描画範囲を調整
     site_coords_x = site_shps.site.T[0, :]

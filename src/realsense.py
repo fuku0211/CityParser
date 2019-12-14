@@ -122,6 +122,7 @@ def record_realsense_with_gps(args):
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         executor.submit(_extract_gps_data, ser)
 
+        # TODO:フォルダ作成
         site_path = Path("data", "hdf5", args.site)
         color_path = site_path / Path("color.hdf5")
         depth_path = site_path / Path("depth.hdf5")
