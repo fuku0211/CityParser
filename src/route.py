@@ -9,7 +9,7 @@ from matplotlib.collections import PolyCollection
 from shapely.geometry import LineString, Polygon
 from tqdm import tqdm, trange
 
-from geometry.shapes import Shape
+from geometry.shapes import ShapeCollection
 from utils.tool import parse_gps_data
 from utils.color_output import output_with_color
 
@@ -30,6 +30,7 @@ class Mapbbox:
     polygon : Polygon
         オブジェクトが地図領域内にあるか判定するために使う
     """
+
     def __init__(self):
         self.min_x = None
         self.min_y = None
@@ -122,17 +123,66 @@ def visualize_route(args, text_step=10):
         フレーム数の表示の間隔, by default 10
     """
     date_path = Path("data", "hdf5", args.site)
-    shape_path = Path("data", "shp", args.site)
     gps_path = date_path / Path("gps.hdf5")
+    shape_path = Path("data", "shp", args.site)
+    json_path = Path("data", "json", args.site)
+    with open(json_path / Path("config.json")) as f:
+        file = json.load(f)
+        try:
+            black_list = file["blacklist"]
+        except KeyError:
+            black_list = []
 
     fig = plt.figure()
     bbox = Mapbbox()
     ax = fig.add_subplot(1, 1, 1)
 
+    # 敷地地図を描画
+    site_shps = ShapeCollection(shape_path, json_path)
+
+    # 敷地が入るように描画範囲を調整
+    site_coords_x = site_shps.site.T[0, :]
+    site_coords_y = site_shps.site.T[1, :]
+    bbox.update(site_coords_x, site_coords_y)
+    bbox.apply_margin()
+    # 敷地の描画
+    for i, code in enumerate(site_shps.gcode):
+        if code in black_list:
+            ax.add_collection(
+                PolyCollection([site_shps.block[i]], facecolor=(0.95, 0.8, 0.8))
+            )
+        else:
+            ax.add_collection(
+                PolyCollection([site_shps.block[i]], facecolor=(0.8, 0.95, 0.8))
+            )
+
+    # ポリラインの描画
+    output_with_color("drawing polylines", "g")
+    for line_categ in [site_shps.road, site_shps.side]:
+        # 地図のbbox内に存在するもののみを取り出して描画
+        for l in tqdm(line_categ):
+            if bbox.contain(LineString(l)):
+                ax.plot(l.T[0, :], l.T[1, :], color=(0, 0, 0), lw=0.2, zorder=1)
+
+    # ポリゴンの描画
+    output_with_color("drawing polygons", "g")
+    for poly_categ in [site_shps.bldg]:
+        # 地図のbbox内に存在するもののみを取り出して描画
+        poly_inbbox = []
+        for p in tqdm(poly_categ):
+            if p.shape[0] == 2:  # 国土数値情報の建物情報に混じったただの直線を無視
+                continue
+            if bbox.contain(Polygon(p)):
+                poly_inbbox.append(p)
+
+        if args.road is False:
+            coll = PolyCollection(poly_inbbox, facecolor=(0.3, 0.3, 0.3))
+            ax.add_collection(coll)
+
     # 移動ルートを描画
     output_with_color("drawing routes", "g")
     with h5py.File(str(gps_path), "r") as fg:
-        if args.all is True: # 分割後のルートを処理する場合
+        if args.all is True:  # 分割後のルートを処理する場合
             routes = [i for i in fg.keys() if args.date[0] + "_" in i]
         else:
             routes = args.date
@@ -154,35 +204,8 @@ def visualize_route(args, text_step=10):
                 if args.num and f % text_step == 0:  # フレーム番号を一定間隔で表示する
                     ax.text(c_x, c_y, str(f), fontsize=10)
             # 各点を描画
-            ax.scatter(
-                route_coords_x, route_coords_y, s=10, label=route, zorder=2
-            )
-            bbox.update(route_coords_x, route_coords_y)
+            ax.scatter(route_coords_x, route_coords_y, s=10, label=route, zorder=2)
 
-    # 敷地地図を描画
-    site_shps = Shape(shape_path)
-    output_with_color("drawing polygons", "g")
-    for poly_categ in [site_shps.bldg]:
-        # 地図のbbox内に存在するもののみを取り出して描画
-        poly_inbbox = []
-        for p in tqdm(poly_categ):
-            if p.shape[0] == 2:  # 国土数値情報の建物情報に混じったただの直線を無視
-                continue
-            if bbox.contain(Polygon(p)):
-                poly_inbbox.append(p)
-
-        if args.road is False:
-            coll = PolyCollection(poly_inbbox, facecolor=(0.9, 0.9, 0.9))
-            ax.add_collection(coll)
-
-    output_with_color("drawing polylines", "g")
-    for line_categ in [site_shps.road, site_shps.side]:
-        # 地図のbbox内に存在するもののみを取り出して描画
-        for l in tqdm(line_categ):
-            if bbox.contain(LineString(l)):
-                ax.plot(l.T[0, :], l.T[1, :], color=(0, 0, 0), lw=0.2, zorder=1)
-
-    bbox.apply_margin()
     ax.set_xlim([bbox.min_x, bbox.max_x])
     ax.set_ylim([bbox.min_y, bbox.max_y])
     # ax.legend(loc="upper right")
@@ -206,6 +229,7 @@ class Route:
     seg_path : Path
         seg.hdf5のパス
     """
+
     def __init__(self, json_path, hdf5_path, seg=False):
         """
 

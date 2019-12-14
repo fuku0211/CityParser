@@ -1,4 +1,5 @@
 import argparse
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -6,6 +7,7 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from tqdm import tqdm
 
+from geometry.shapes import ShapeCollection, Site
 from utils.color_output import output_with_color
 
 
@@ -48,7 +50,7 @@ def parse_convex_hull_from_pcd(args):
                 convexhull = ConvexHull(cluster_pts)
                 volumes.append(convexhull.volume)
                 areas.append(convexhull.area)
-            except: # hullが小さすぎてエラーを吐く場合
+            except:  # hullが小さすぎてエラーを吐く場合
                 error += 1
 
     fig = plt.figure()
@@ -61,6 +63,18 @@ def parse_convex_hull_from_pcd(args):
     plt.show()
 
 
+def parse_voronoi(args):
+    shp_dir = Path("data", "shp", args.site)
+    json_dir = Path("data", "json", args.site)
+    with open(json_dir / Path("config.json"), "r") as f:
+        file = json.load(f)
+        black_list = file["blacklist"]
+    shps = ShapeCollection(shp_dir, json_dir)
+    site = Site(shps, black_list)
+    site_vor = site.get_block_voronoi(args.interval)
+    print()
+
+
 if __name__ == "__main__":
     # コマンドライン用
     parser = argparse.ArgumentParser()
@@ -69,12 +83,15 @@ if __name__ == "__main__":
     # 共通の引数
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("-s", "--site", required=True)
+    parent_parser.add_argument("-d", "--date", required=True)
 
     # 各コマンドの設定
     volume_parser = subparsers.add_parser("volume", parents=[parent_parser])
-    volume_parser.add_argument("-d", "--date")
     volume_parser.set_defaults(handler=parse_convex_hull_from_pcd)
 
+    voronoi_parser = subparsers.add_parser("voronoi", parents=[parent_parser])
+    voronoi_parser.add_argument("-i", "--interval", default=1)
+    voronoi_parser.set_defaults(handler=parse_voronoi)
     args = parser.parse_args()
 
     if hasattr(args, "handler"):

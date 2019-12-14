@@ -64,7 +64,12 @@ def replay_movie(args):
         color_group = fc[args.date]
         depth_group = fd[args.date]
 
-        for i in color_group.keys():
+        # キーをソートするためintにキャストして戻す
+        keys = list(color_group.keys())
+        keys = list(map(int, keys))
+        keys.sort()
+        keys = list(map(str, keys))
+        for i in keys:
             # ベクトル化したデータをもとの配列の形に戻す
             color_frame = np.rot90(array_to_3dim(color_group[str(i)]))
             depth_frame = np.rot90(array_to_3dim(depth_group[str(i)]))
@@ -91,6 +96,9 @@ def replay_movie(args):
             cv2.namedWindow("RealSense", cv2.WINDOW_AUTOSIZE)
             cv2.imshow("RealSense", images)
 
+            # スピード調整
+            sleep(args.interval)
+
             key = cv2.waitKey(1) & 0xFF
             # qキーを押したら終了
             if key == ord("q"):
@@ -114,6 +122,7 @@ def record_realsense_with_gps(args):
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         executor.submit(_extract_gps_data, ser)
 
+        # TODO:フォルダ作成
         site_path = Path("data", "hdf5", args.site)
         color_path = site_path / Path("color.hdf5")
         depth_path = site_path / Path("depth.hdf5")
@@ -239,6 +248,7 @@ if __name__ == "__main__":
     replay_parser = subparsers.add_parser("replay")
     replay_parser.add_argument("-s", "--site", required=True)
     replay_parser.add_argument("-d", "--date", required=True)
+    replay_parser.add_argument("-i", "--interval", type=float, default=0)
     replay_parser.set_defaults(handler=replay_movie)
 
     args = parser.parse_args()

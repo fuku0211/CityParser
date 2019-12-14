@@ -76,7 +76,6 @@ def array_to_3dim(array):
     return result
 
 
-# TRANSFORMER = pyproj.Transformer.from_crs("EPSG:6668", "EPSG:30169")
 TRANSFORMER = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:30169")
 
 
