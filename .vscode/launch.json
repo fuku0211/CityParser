@@ -12,7 +12,9 @@
                 "20191112_142615_a",
                 "20191121_114900",
                 "20191211_125844",
-                "20191212_123533"
+                "20191212_123533",
+                "20191214_132857",
+                "20191215_124740"
             ]
         },
         {
@@ -23,7 +25,9 @@
                 "test",
                 "daizawa_4",
                 "nezu_2",
-                "tsurumaki_5"
+                "tsurumaki_5",
+                "ushikubo_1",
+                "tsukishima_3"
             ]
         }
     ],
@@ -162,6 +166,19 @@
             "program": "${workspaceRoot}/src/route.py",
             "args": [
                 "split",
+                "-s",
+                "${input:site}",
+                "-d",
+                "${input:date}"
+            ]
+        },
+        {
+            "name": "route gpx",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/route.py",
+            "args": [
+                "gpx",
                 "-s",
                 "${input:site}",
                 "-d",
