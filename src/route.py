@@ -1,8 +1,10 @@
 import argparse
 import json
 from contextlib import ExitStack
+from operator import itemgetter
 from pathlib import Path
 
+import gpxpy.gpx
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
@@ -10,8 +12,8 @@ from shapely.geometry import LineString, Polygon
 from tqdm import tqdm, trange
 
 from geometry.shapes import ShapeCollection
-from utils.tool import parse_gps_data
 from utils.color_output import output_with_color
+from utils.tool import parse_lat_lon_from_gps, parse_x_y_from_gps
 
 
 class Mapbbox:
@@ -196,7 +198,7 @@ def visualize_route(args, text_step=10):
             if args.start is not None:  # 開始地点指定時は必要な部分のリストを取り出す
                 frame_keys = [i for i in frame_keys if i >= args.start]
             for f in tqdm(frame_keys, desc=f"{route}", leave=False):
-                c_x, c_y, dire, ht = parse_gps_data(fg[route][str(f)])
+                c_x, c_y, dire, ht = parse_x_y_from_gps(fg[route][str(f)])
                 if c_x is None and c_y is None:  # 欠損値に対する処理
                     continue
                 route_coords_x.append(c_x)
@@ -256,6 +258,7 @@ class Route:
         dates : list
             処理対象の日時
         """
+        # TODO: １ルートのみに対応
         with ExitStack() as stack:
             fj = stack.enter_context(open(self.json_path, "r"))
             fd = stack.enter_context(h5py.File(self.depth_path, "a"))
@@ -322,6 +325,37 @@ def extract_routes(args):
     routes.extract_routes_from_config(args.date)
 
 
+def create_gpx_from_hdf5(args):
+    gpx = gpxpy.gpx.GPX()
+
+    # Create first track in our GPX:
+    gpx_track = gpxpy.gpx.GPXTrack(name="test")
+    gpx.tracks.append(gpx_track)
+
+    # Create first segment in our GPX track:
+    gpx_segment_a = gpxpy.gpx.GPXTrackSegment()
+    gpx_segment_b = gpxpy.gpx.GPXTrackSegment()
+    gpx_track.segments.append(gpx_segment_a)
+    gpx_track.segments.append(gpx_segment_b)
+
+    gpx_path = Path("data", "gpx", args.site)
+    gpx_path.mkdir(parents=True, exist_ok=True)
+
+    for date in tqdm(args.date, desc="all"):
+        px_file_w = open(str(gpx_path / Path(f"{date}.gpx")), "w")
+
+        # Create points:
+        hdf5_path = Path("data", "hdf5", args.site, "gps.hdf5")
+        with h5py.File(str(hdf5_path), "r") as f:
+            group_route = f[date]
+            for i in tqdm(range(len(group_route.keys())), desc=f"{date}"):
+                lat, lon = parse_lat_lon_from_gps(group_route[str(i)])
+                gpx_segment_a.points.append(gpxpy.gpx.GPXTrackPoint(lat, lon))
+
+        px_file_w.write(gpx.to_xml(version="1.1"))
+        px_file_w.close()
+
+
 if __name__ == "__main__":
     # コマンドライン用
     parser = argparse.ArgumentParser()
@@ -343,6 +377,10 @@ if __name__ == "__main__":
     split_parser = subparsers.add_parser("split", parents=[parent_parser])
     split_parser.add_argument("--with_seg", action="store_true")
     split_parser.set_defaults(handler=extract_routes)
+
+    # gpxコマンドの動作
+    gpx_parser = subparsers.add_parser("gpx", parents=[parent_parser])
+    gpx_parser.set_defaults(handler=create_gpx_from_hdf5)
 
     args = parser.parse_args()
     if hasattr(args, "handler"):
