@@ -11,7 +11,7 @@ from matplotlib.collections import PolyCollection
 from shapely.geometry import LineString, Polygon
 from tqdm import tqdm, trange
 
-from geometry.shapes import ShapeCollection
+from geometry.shapes import ShapeFileCache
 from utils.color_output import output_with_color
 from utils.tool import parse_lat_lon_from_gps, parse_x_y_from_gps
 
@@ -140,7 +140,7 @@ def visualize_route(args, text_step=10):
     ax = fig.add_subplot(1, 1, 1)
 
     # 敷地地図を描画
-    site_shps = ShapeCollection(shape_path, json_path)
+    site_shps = ShapeFileCache(shape_path, json_path)
 
     # 敷地が入るように描画範囲を調整
     site_coords_x = site_shps.site.T[0, :]

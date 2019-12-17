@@ -1,37 +1,37 @@
 from contextlib import ExitStack
+from itertools import product
 from math import ceil
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import shapefile
-from scipy.spatial import Voronoi
-from shapely.geometry import LineString, Polygon
-from shapely.ops import cascaded_union
+from scipy.spatial import Voronoi, voronoi_plot_2d
+from shapely.geometry import LineString, Point, Polygon, MultiPolygon
+from shapely.ops import cascaded_union, split
 from tqdm import tqdm
 
 from utils.color_output import output_with_color
+from utils.tool import get_key_from_value, plot_voronoi_with_label
 
 
-class ShapeCollection():
+class ShapeFileCache:
     """shapeファイルを読み込んだ情報を格納
 
     Attributes
     ----------
-    path : Path
-        shapeファイルのパス
+    shp_dir : Path
+        shapeフォルダのディレクトリ
+    json_dir : Path
+        jsonフォルダのディレクトリ
     bldg : list
         建物の輪郭線座標
     road : list
         道路の輪郭線座標
     side : list
         歩道の輪郭線座標
-    site : list
-        敷地の外周線座標
-    block : list
-        各街区の外周線座標
-    gcode : list
-        街区コード
     """
+
     def __init__(self, shp_dir, json_dir):
         """
 
@@ -45,11 +45,10 @@ class ShapeCollection():
         self.shp_dir = shp_dir
         self.json_dir = json_dir
         output_with_color("loading shape file", "g")
-        # 敷地と街区を読み込む
-        self.site = None
+        self.site = self._load_site()
         self.block = None
         self.gcode = None
-        self._load_site_and_blocks_with_gcode()
+        self._load_blocks_and_gcode()
 
         self.bldg = self._load_parts("tatemono.shp")
         self.road = self._load_parts("road.shp")
@@ -87,73 +86,29 @@ class ShapeCollection():
 
         return shp_points_all
 
-    def _load_site_and_blocks_with_gcode(self):
-        """[summary]
-        """
-        shp_path = self.shp_dir / Path("gaiku.shp")
-        # shapeファイルを開く
-        with ExitStack() as stack:
-            fp = stack.enter_context(shapefile.Reader(str(shp_path)))
-            blocks_parts = [i.points for i in fp.shapes()]
-            records = fp.records()
+    def _load_site(self):
+        file_path = self.shp_dir / Path("site.shp")
+        with shapefile.Reader(str(file_path)) as src:
+            site = src.shapes()[0]
+        return np.asarray(site.points)
 
-        # gcodeが同じポリゴンをまとめる
-        gcodes = [i["gcode"] for i in records]
-        gcodes_set = list(set(gcodes))
-        blocks_joined = []
-        for code in gcodes_set:
-            block_idx = [i for i, x in enumerate(gcodes) if x == code]
-            marge_shp = [Polygon(blocks_parts[i]) for i in block_idx]
-            if len(marge_shp) == 1:
-                marged_block = marge_shp[0]
-            else:
-                marged_block = cascaded_union(marge_shp)
-            block_coords = np.asarray(marged_block.exterior.coords)
-            blocks_joined.append(block_coords)
-
-        site = cascaded_union([Polygon(i) for i in blocks_joined])
-        self.site = np.asarray(site.exterior.coords)
-        self.block = blocks_joined
-        self.gcode = gcodes_set
+    def _load_blocks_and_gcode(self):
+        file_path = self.shp_dir / Path("gaiku.shp")
+        with shapefile.Reader(str(file_path)) as src:
+            blocks = src.shapes()
+            rcds = src.records()
+        self.block = [np.asarray(i.points) for i in blocks]
+        self.gcode = [i["gcode"] for i in rcds]
 
 
-class Site():
-    def __init__(self, shps, black_list):
-        self._black_list = black_list
-        self.block_buildings = self._get_block_buildings_from_shp(shps)
-        self.block_boundaries = self._get_block_boundaries_from_shp(shps)
+class MapObject(object):
+    def __init__(self, boundary):
+        self.boundary = boundary
 
-    def _get_block_buildings_from_shp(self, shps):
-        # 各街区のリストに、その街区内に建つ建物のPolygonを格納する
-        all_buildings = []
-        output_with_color("searching buildings in block", "g")
-        for block in tqdm([Polygon(i) for i in shps.block]):
-            block_buildings = []
-            for building in [Polygon(i) for i in shps.bldg]:
-                if block.contains(building):
-                    block_buildings.append(building)
-            all_buildings.append(block_buildings)
-
-        # 無視する街区をリストから排除
-        blocks = []
-        for i, code in enumerate(shps.gcode):
-            if code not in self._black_list:
-                blocks.append(all_buildings[i])
-        return blocks
-
-    def _get_block_boundaries_from_shp(self, shps):
-        # 無視する街区をリストから排除
-        boundaries = []
-        for i, code in enumerate(shps.gcode):
-            if code not in self._black_list:
-                boundaries.append(shps.block[i])
-        return boundaries
-
-    @classmethod
-    def _divide_boundary(cls, boundary, interval):
+    def divide_boundary(self, interval):
         div_pts = []
-        for i in range(boundary.shape[0] - 1):
-            edge_pts = boundary[i : i + 2, :]
+        for i in range(self.boundary.shape[0] - 1):
+            edge_pts = self.boundary[i : i + 2, :]
             dist = np.linalg.norm(edge_pts[0, :] - edge_pts[1, :])
             # コマンドラインの引数をもとに分割数を決定する
             div = dist / interval
@@ -167,49 +122,231 @@ class Site():
             div_pts.append(line_div_pts[1:, :])  # 角の分割点が重ならないように
         return np.concatenate(div_pts)
 
-    def get_block_voronoi(self, interval):
+
+class Land(MapObject):
+    def __init__(self, boundary):
+        super(Land, self).__init__(boundary)
+
+
+class Building(MapObject):
+    def __init__(self, boundary):
+        super(Building, self).__init__(boundary)
+        self.lands = None
+
+    def set_lands(self, candidates):
+        lands = []
+        building = Polygon(self.boundary)
+        for voronoi_poly in candidates:
+            if building.intersects(Polygon(voronoi_poly)):  # 交差判定
+                lands.append(voronoi_poly)
+        self.lands = lands
+
+    def calc_land_area(self):
+        pass
+
+
+class Block(MapObject):
+    def __init__(self, boundary, gcode):
+        super(Block, self).__init__(boundary)
+        self.gcode = gcode
+        self.buildings = None
+
+    def set_buildings(self, candidates):
+        block_buildings = []
+        block = Polygon(self.boundary)
+        for candidate in candidates:
+            if block.contains(Polygon(candidate)):
+                block_buildings.append(Building(candidate))
+        self.buildings = block_buildings
+
+
+class Site(MapObject):
+    def __init__(self, shp_cache):
+        super(Site, self).__init__(shp_cache.site)
+        self.blocks = self._create_blocks(shp_cache)
+
+    def _create_blocks(self, shp_cache):
+        output_with_color("setting building and blocks", "g")
+        blocks = []
+        for i, boundary in enumerate(tqdm(shp_cache.block)):
+            block = Block(boundary, shp_cache.gcode[i])
+            block.set_buildings(shp_cache.bldg)
+            blocks.append(block)
+        return blocks
+
+    @staticmethod
+    def _create_inf_vector(start_pt, pt_a, pt_b):
+        """ボロノイ分割で無限遠方向に伸びる辺のベクトルを求める
+
+        Parameters
+        ----------
+        start_pt : array
+            辺の始点
+        pt_a : array
+            ボロノイ母点
+        pt_b : array
+            ボロノイ母点
+
+        Returns
+        -------
+        array
+        """
+        mid_pt = (pt_a + pt_b) / 2
+        vec = start_pt - mid_pt
+        return vec / np.linalg.norm(vec)
+
+    @staticmethod
+    def _get_overlaps_block_and_voronoi(block_poly, vor_poly):
+        try:
+            overlap = block_poly.intersection(vor_poly)
+            if isinstance(overlap, MultiPolygon):
+                overlap_poly = list(overlap)
+            else:
+                overlap_poly = [overlap]
+        except:
+            print("overlap error")
+            overlap_poly = []
+        return overlap_poly
+
+    def run_voronoi_building_land(self, interval, black_list, extend=50):
         output_with_color("voronoi tesselation")
-        all_voronoi = []
-        for idx, block in enumerate(tqdm(self.block_buildings)):
+        for idx, block in enumerate(tqdm(self.blocks)):
             # 建物のない街区はスキップ
-            if len(block) == 0:
-                all_voronoi.append([])
+            if len(block.buildings) == 0:
                 continue
 
-            # 街区の外周線上にボロノイ母点を配置する
-            block_pts = self._divide_boundary(self.block_boundaries[idx], interval)
+            # ブラックリストをスキップ
+            if block.gcode in black_list:
+                continue
 
             # 街区内の建物の外周線上にボロノイ母点を配置する
+            block_poly = Polygon(block.boundary)
             block_bldg_pts = []
-            for building in block:
-                building_bndry = np.asarray(building.exterior.coords)
-                block_bldg_pts.append(self._divide_boundary(building_bndry, interval))
-            building_pts = np.concatenate(block_bldg_pts)
+            for building in block.buildings:
+                bldg_div_pts = building.divide_boundary(interval)
+                # 建物の外周線上の点が街区外にある場合削除する
+                in_block = []
+                for i, pts in enumerate(bldg_div_pts.tolist()):
+                    if block_poly.contains(Point(pts[0], pts[1])):
+                        in_block.append(i)
+                bldg_div_pts = bldg_div_pts[in_block, :]
+                block_bldg_pts.append(bldg_div_pts)
 
-            # 街区内のすべてのボロノイ母点
-            block_mother_pts = np.concatenate([block_pts, building_pts])
+            block_mother_pts = np.concatenate(block_bldg_pts)
+
             # 重複した点はボロノイ分割でエラーを起こすため削除
             block_mother_pts = block_mother_pts.astype("float32")
             block_mother_pts = np.unique(block_mother_pts, axis=0)
 
             # ボロノイ作成
-            vor = Voronoi(block_mother_pts)
+            import matplotlib.pyplot as plt
+            from matplotlib.collections import PolyCollection
+
+            try:
+                vor = Voronoi(block_mother_pts)
+            except:
+                # 母点の数が少ないとエラー
+                exit()
+            # plot_voronoi_with_label(vor)
             voronoi_polys = []  # 街区内のすべてのボロノイ
-            for region in vor.regions:
-                # 街路外周線上の点をボロノイ母点としている場合スキップ
-                if -1 in region or len(region) == 0:
+            for reg_idx, region in enumerate(vor.regions):
+                # 無効な場合はスキップ
+                if len(region) == 0:
                     continue
-                verts = vor.vertices[region]
-                voronoi_polys.append(Polygon(verts))
 
-            # 建物に対応するリストに建物と交差するボロノイを格納する
-            block_voronoi = []
-            for building in self.block_buildings[idx]:
-                vor_in_building = []
-                for voronoi_poly in voronoi_polys:
-                    if building.intersects(voronoi_poly): # 交差判定
-                        vor_in_building.append(voronoi_poly)
-                block_voronoi.append(vor_in_building)
+                # ボロノイが無限遠に伸びる辺を持つ時
+                elif -1 in region:
+                    # regionに対応するボロノイ母点を取り出す
+                    mother_idx = np.where(vor.point_region == reg_idx)[0][0]
+                    mother_pt = vor.points[mother_idx, :]
 
-            all_voronoi.append(block_voronoi)
-        return all_voronoi
+                    # FIXME: nazo
+                    if len(region) <= 2:
+                        continue
+
+                    idx_inf = region.index(-1)
+                    idx_a = -1 if idx_inf == 0 else idx_inf - 1
+                    idx_b = 0 if idx_inf == len(region) - 1 else idx_inf + 1
+                    # 2つの辺を構成する店のインデックス
+                    edge_a = [region[idx_inf], region[idx_a]]
+                    edge_b = [region[idx_inf], region[idx_b]]
+                    # それぞれの辺を共有しているボロノイ母点のインデックスのペア
+                    key_a = get_key_from_value(vor.ridge_dict, edge_a)
+                    key_b = get_key_from_value(vor.ridge_dict, edge_b)
+
+                    # FIXME: nazo
+                    if len(key_a) == 1:
+                        key_a = key_a[0]
+                    else:
+                        key_a = [i for i in key_a if mother_idx in i][0]
+                    if len(key_b) == 1:
+                        key_b = key_b[0]
+                    else:
+                        key_b = [i for i in key_b if mother_idx in i][0]
+                    # 辺のベクトルを求める
+                    vec_a = self._create_inf_vector(
+                        vor.vertices[region[idx_a]],
+                        vor.points[key_a[0], :],
+                        vor.points[key_a[1], :],
+                    )
+                    vec_b = self._create_inf_vector(
+                        vor.vertices[region[idx_b]],
+                        vor.points[key_b[0], :],
+                        vor.points[key_b[1], :],
+                    )
+                    # 内積が正かつ母点を含むポリゴンを生成する点が辺上の点になる
+                    # TODO: ベクトルあたりが怪しい
+                    patterns = product([vec_a, vec_a * -1], [vec_b, vec_b * -1])
+                    patterns = [i for i in patterns if np.dot(i[0], i[1]) > 0]
+                    poly = None
+                    for pattern in patterns:
+                        # 指定した位置に点を配置
+                        replace_a = vor.vertices[region[idx_a]] + pattern[0] * extend
+                        replace_b = vor.vertices[region[idx_b]] + pattern[1] * extend
+                        pts = []
+                        for i in region:
+                            if i == -1:
+                                pts.append(replace_a)
+                                pts.append(replace_b)
+                            else:
+                                pts.append(vor.vertices[i, :])
+
+                        p = Polygon(np.asarray(pts))
+                        if p.is_valid is True and p.contains(Point(mother_pt[0], mother_pt[1])):
+                            poly = p
+
+                    # 街区とボロノイの共通部分を取りだす
+                    if poly is None:
+                        print()
+                    overlaps = self._get_overlaps_block_and_voronoi(block_poly, poly)
+                    if len(overlaps) != 0:
+                        for p in overlaps:
+                            voronoi_polys.append(p.exterior.coords)
+
+
+                else:
+                    # 街区とボロノイの共通部分を取りだす
+                    verts = vor.vertices[region]
+                    poly = Polygon(verts)
+                    overlaps = self._get_overlaps_block_and_voronoi(block_poly, poly)
+                    if len(overlaps) != 0:
+                        for p in overlaps:
+                            voronoi_polys.append(p.exterior.coords)
+
+            # fig = plt.figure()
+            # ax = fig.add_subplot(1,1,1)
+
+            # coll = PolyCollection([block.boundary], facecolor=(0.9,0.9,0.9))
+            # ax.add_collection(coll)
+            # coll = PolyCollection(voronoi_polys)
+            # ax.add_collection(coll)
+
+            # tmp = block.boundary
+            # fig.axes[0].set_xlim([min(tmp[:, 0]), max(tmp[:, 0])])
+            # fig.axes[0].set_ylim([min(tmp[:, 1]), max(tmp[:, 1])])
+            # fig.axes[0].set_aspect("equal")
+            # plt.show()
+
+            # 各ボロノイを対応する建物に
+            for building in block.buildings:
+                building.set_lands(voronoi_polys)
