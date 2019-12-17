@@ -16,7 +16,7 @@ from geometry.capture import CameraIntrinsic
 from utils.tool import (
     array_to_3dim,
     calc_angle_between_axis,
-    parse_gps_data,
+    parse_x_y_from_gps,
     random_colors,
 )
 from utils.color_output import output_with_color
@@ -109,8 +109,8 @@ def create_pcd(args):
             for f in tqdm(iter_idx, desc=route, leave=False):
                 # 進行方向を求めるために2つの連続したフレームのGPS情報を解析する
                 try:
-                    gps_from = parse_gps_data(gps_group[str(frame_keys[f])])
-                    gps_to = parse_gps_data(gps_group[str(frame_keys[f + 1])])
+                    gps_from = parse_x_y_from_gps(gps_group[str(frame_keys[f])])
+                    gps_to = parse_x_y_from_gps(gps_group[str(frame_keys[f + 1])])
                 except IndexError:  # 最後のフレームは方向を決められないので削除
                     break
 
@@ -129,7 +129,7 @@ def create_pcd(args):
                     while True:
                         new_idx = f + 1 + skip
                         try:
-                            gps_to = parse_gps_data(gps_group[str(frame_keys[new_idx])])
+                            gps_to = parse_x_y_from_gps(gps_group[str(frame_keys[new_idx])])
                         except IndexError:
                             break
                         if gps_from[0:2] != gps_to[0:2]:
@@ -271,12 +271,13 @@ def cluster_pcd(args):
     output_with_color("start clustering")
     site_path = Path("data", "pts", args.site)
     dates = [i.name for i in site_path.iterdir()]
+
     for route in tqdm(dates):
         # 点群のロード
         load_path = site_path / Path(route, "segmentation.pts")
         load_pcd = o3d.io.read_point_cloud(str(load_path))
 
-        labels = list(load_pcd.cluster_dbscan(0.3, 150))
+        labels = list(load_pcd.cluster_dbscan(0.7, 150))
         pts = np.asarray(load_pcd.points)
 
         result_pcd = o3d.geometry.PointCloud()

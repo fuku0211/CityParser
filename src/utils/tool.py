@@ -3,7 +3,7 @@ import math
 import random
 import subprocess
 from operator import itemgetter
-
+from scipy.spatial import voronoi_plot_2d
 import numpy as np
 import pyproj
 from geometry.capture import HEIGHT, WIDTH
@@ -135,3 +135,18 @@ def parse_lat_lon_from_gps(gpsdata):
         lat = dd_lat + mm_lat * 100 / 60
         lon = dd_lon + mm_lon * 100 / 60
     return lat, lon
+
+
+def get_key_from_value(d, val):
+    keys = [k for k, v in d.items() if set(v) == set(val)]
+    return keys
+
+
+def plot_voronoi_with_label(vor):
+    fig = voronoi_plot_2d(vor)
+    for i in range(vor.points.shape[0]):
+        fig.axes[0].text(vor.points[i, 0], vor.points[i, 1], f"{i}")
+    for i in range(vor.vertices.shape[0]):
+        fig.axes[0].text(vor.vertices[i, 0], vor.vertices[i, 1], f"{i}")
+    fig.axes[0].set_aspect("equal")
+    fig.show()

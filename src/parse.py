@@ -7,8 +7,10 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from tqdm import tqdm
 
-from geometry.shapes import ShapeCollection, Site
+from geometry.shapes import ShapeFileCache, Site
 from utils.color_output import output_with_color
+from utils.tool import random_colors
+from matplotlib.collections import PolyCollection
 
 
 def parse_convex_hull_from_pcd(args):
@@ -54,12 +56,13 @@ def parse_convex_hull_from_pcd(args):
                 error += 1
 
     fig = plt.figure()
-    ax1 = fig.add_subplot(1, 2, 1)
-    ax2 = fig.add_subplot(1, 2, 2)
-    ax1.hist(volumes, bins=50, range=(0, 3))
-    ax1.set_title("volumes")
-    ax2.hist(areas, bins=50, range=(0, 10))
-    ax2.set_title("areas")
+    ax1 = fig.add_subplot(1, 1, 1)
+    # ax2 = fig.add_subplot(1, 2, 2)
+    ax1.hist(volumes, bins=1000)
+    # ax2.hist(areas, bins=50, range=(0, 10))
+    fig_dir = Path("data", "png", args.site)
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    plt.savefig(fig_dir / Path("volume.png"), facecolor="azure", bbox_inches='tight', pad_inches=0)
     plt.show()
 
 
@@ -69,9 +72,31 @@ def parse_voronoi(args):
     with open(json_dir / Path("config.json"), "r") as f:
         file = json.load(f)
         black_list = file["blacklist"]
-    shps = ShapeCollection(shp_dir, json_dir)
-    site = Site(shps, black_list)
-    site_vor = site.get_block_voronoi(args.interval)
+    shps = ShapeFileCache(shp_dir, json_dir)
+    site = Site(shps)
+    site.run_voronoi_building_land(args.interval, black_list)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    coll = PolyCollection([i.boundary for i in site.blocks], facecolor=(0.9,0.9,0.9))
+    ax.add_collection(coll)
+
+    for block in site.blocks:
+        colors = random_colors(len(block.buildings))
+        for idx, building in enumerate(block.buildings):
+            if building.lands is None:
+                continue
+            coll = PolyCollection([i for i in building.lands], facecolor=colors[idx])
+            ax.add_collection(coll)
+
+        coll = PolyCollection([i.boundary for i in block.buildings], facecolor=(0.6, 0.6, 0.6))
+        ax.add_collection(coll)
+
+    ax.set_xlim([min(site.boundary[:, 0]), max(site.boundary[:, 0])])
+    ax.set_ylim([min(site.boundary[:, 1]), max(site.boundary[:, 1])])
+    # ax.legend(loc="upper right")
+    ax.set_aspect("equal")
+    plt.show()
     print()
 
 
@@ -83,7 +108,7 @@ if __name__ == "__main__":
     # 共通の引数
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("-s", "--site", required=True)
-    parent_parser.add_argument("-d", "--date", required=True)
+    parent_parser.add_argument("-d", "--date")
 
     # 各コマンドの設定
     volume_parser = subparsers.add_parser("volume", parents=[parent_parser])
