@@ -207,8 +207,6 @@
                 "volume",
                 "-s",
                 "${input:site}",
-                "-d",
-                "${input:date}"
             ]
         },
         {
