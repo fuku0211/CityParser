@@ -114,7 +114,7 @@ class Mapbbox:
         return self.polygon.contains(geometry)
 
 
-def visualize_route(args, text_step=10):
+def visualize_route(args):
     """歩いたルートを描画する
 
     Parameters
@@ -128,12 +128,6 @@ def visualize_route(args, text_step=10):
     gps_path = date_path / Path("gps.hdf5")
     shape_path = Path("data", "shp", args.site)
     json_path = Path("data", "json", args.site)
-    with open(json_path / Path("config.json")) as f:
-        file = json.load(f)
-        try:
-            black_list = file["blacklist"]
-        except KeyError:
-            black_list = []
 
     fig = plt.figure()
     bbox = Mapbbox()
@@ -149,7 +143,7 @@ def visualize_route(args, text_step=10):
     bbox.apply_margin()
     # 敷地の描画
     for i, code in enumerate(site_shps.gcode):
-        if code in black_list:
+        if code in site_shps.black_list:
             ax.add_collection(
                 PolyCollection([site_shps.block[i]], facecolor=(0.95, 0.8, 0.8))
             )
@@ -161,10 +155,8 @@ def visualize_route(args, text_step=10):
     # ポリラインの描画
     output_with_color("drawing polylines", "g")
     for line_categ in [site_shps.road, site_shps.side]:
-        # 地図のbbox内に存在するもののみを取り出して描画
         for l in tqdm(line_categ):
-            if bbox.contain(LineString(l)):
-                ax.plot(l.T[0, :], l.T[1, :], color=(0, 0, 0), lw=0.2, zorder=1)
+            ax.plot(l.T[0, :], l.T[1, :], color=(0, 0, 0), lw=0.2, zorder=1)
 
     # ポリゴンの描画
     output_with_color("drawing polygons", "g")
@@ -174,8 +166,7 @@ def visualize_route(args, text_step=10):
         for p in tqdm(poly_categ):
             if p.shape[0] == 2:  # 国土数値情報の建物情報に混じったただの直線を無視
                 continue
-            if bbox.contain(Polygon(p)):
-                poly_inbbox.append(p)
+            poly_inbbox.append(p)
 
         if args.road is False:
             coll = PolyCollection(poly_inbbox, facecolor=(0.3, 0.3, 0.3))
@@ -197,14 +188,17 @@ def visualize_route(args, text_step=10):
             frame_keys.sort()
             if args.start is not None:  # 開始地点指定時は必要な部分のリストを取り出す
                 frame_keys = [i for i in frame_keys if i >= args.start]
-            for f in tqdm(frame_keys, desc=f"{route}", leave=False):
-                c_x, c_y, dire, ht = parse_x_y_from_gps(fg[route][str(f)])
-                if c_x is None and c_y is None:  # 欠損値に対する処理
-                    continue
-                route_coords_x.append(c_x)
-                route_coords_y.append(c_y)
-                if args.num and f % text_step == 0:  # フレーム番号を一定間隔で表示する
-                    ax.text(c_x, c_y, str(f), fontsize=10)
+            for i, f in enumerate(tqdm(frame_keys, desc=f"{route}", leave=False)):
+                if args.end is not None and f >= args.end:
+                    break
+                if f % args.step == 0:  # 指定した間隔の点のとき
+                    c_x, c_y, dire, ht = parse_x_y_from_gps(fg[route][str(f)])
+                    if c_x is None and c_y is None:  # 欠損値に対する処理
+                        continue
+                    route_coords_x.append(c_x)
+                    route_coords_y.append(c_y)
+                    if args.num:  # フレーム番号を表示する
+                        ax.text(c_x, c_y, str(f), fontsize=10)
             # 各点を描画
             ax.scatter(route_coords_x, route_coords_y, s=10, label=route, zorder=2)
 
@@ -250,8 +244,8 @@ class Route:
         self.gps_path = hdf5_path / Path("gps.hdf5")
         self.seg_path = hdf5_path / Path("seg.hdf5") if seg else None
 
-    def extract_routes_from_config(self, dates):
-        """configファイルをもとにあるルートから必要な部分だけを抽出してhdf5ファイルに書き込む
+    def extract_sections_from_json(self, dates):
+        """sectionファイルをもとにあるルートから必要な区間だけを抽出してhdf5ファイルに書き込む
 
         Parameters
         ----------
@@ -268,47 +262,46 @@ class Route:
             if self.seg_path is not None:
                 fs = stack.enter_context(h5py.File(self.seg_path, "a"))
 
-            routes_dict = json.load(fj)
+            sections_dict = json.load(fj)
+
+            # segはない場合があるためその時は無視する
+            if self.seg_path is None:
+                srcs = [fd, fc, fg]
+            else:
+                srcs = [fd, fc, fg, fs]
 
             # コマンドライン引数に入力したルートがjson上で設定されていない場合処理を終了する
-            if set(dates) <= set(routes_dict.keys()):
+            if set(dates) <= set(sections_dict.keys()):
                 pass
             else:
                 print("Route config error")
-                error = set(dates) - set(routes_dict.keys())
+                error = set(dates) - set(sections_dict.keys())
                 print(f"You should create config file for {error}")
                 exit()
 
             print("the number of routes")
-            for route, sections in routes_dict.items():
-                print(f"    - {route} -> {len(sections)} routes")
+            for section, sections in sections_dict.items():
+                print(f"    - {section} -> {len(sections)} routes")
 
-            # segはない場合があるためその時は無視する
-            if self.seg_path is None:
-                key_files = [fd, fc, fg]
-            else:
-                key_files = [fd, fc, fg, fs]
-
-            for route, sections in tqdm(routes_dict.items(), desc="whole"):
-                for section_name, sections in tqdm(sections.items(), desc=f"{route}"):
-                    group_name = route + f"_{section_name}"
-                    # すでにファイル内に名前が重複したグループがあった場合削除する
-                    for file in key_files:
-                        if group_name in list(file.keys()):
-                            del file[group_name]
-
+            for date, sections in tqdm(sections_dict.items(), desc="whole"):
+                for sec_idx, section in enumerate(tqdm(sections, desc=f"{date}")):
+                    sec_suffix = str(sec_idx).zfill(3)
+                    group_name = date + f"_{sec_suffix}"
                     # 元のグループから情報を取得して抽出先のグループに書き込む
-                    for file in key_files:
-                        out_group = file.create_group(group_name)  # 抽出先のグループ
-                        categ_name = file.filename.split("\\")[-1]
-                        desc_text = f"{categ_name}:{section_name}"
-                        for section in sections:
-                            st = section[0]
-                            end = section[1]
-                            for f in tqdm(range(st, end), desc=desc_text, leave=False):
-                                out_group.create_dataset(
-                                    str(f), data=file[route][str(f)], compression="gzip"
-                                )
+                    for src in srcs:
+                        src_name = src.filename.split("\\")[-1]
+                        # すでにファイル内に名前が重複したグループがあった場合削除する
+                        if group_name in list(src.keys()):
+                            del src[group_name]
+
+                        out_group = src.create_group(group_name)  # 抽出先のグループ
+                        desc_text = f"{src_name}:{sec_suffix}"
+                        st = section[0]
+                        end = section[1]
+                        for f in tqdm(range(st, end), desc=desc_text, leave=False):
+                            out_group.create_dataset(
+                                str(f), data=src[date][str(f)], compression="gzip",
+                            )
 
 
 def extract_routes(args):
@@ -322,7 +315,7 @@ def extract_routes(args):
         routes = Route(json_path, hdf5_path, seg=True)
     else:
         routes = Route(json_path, hdf5_path)
-    routes.extract_routes_from_config(args.date)
+    routes.extract_sections_from_json(args.date)
 
 
 def create_gpx_from_hdf5(args):
@@ -362,24 +355,36 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers()
 
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument("-s", "--site", required=True)
-    parent_parser.add_argument("-d", "--date", required=True, nargs="+")
+    parent_parser.add_argument("-s", "--site", required=True, help="処理する敷地の名前")
+    parent_parser.add_argument(
+        "-d", "--date", required=True, nargs="+", help="処理する撮影日時"
+    )
 
     # 各コマンドの設定
-    vis_parser = subparsers.add_parser("vis", parents=[parent_parser])
+    vis_parser = subparsers.add_parser(
+        "vis", parents=[parent_parser], help="歩行ルートを描画する"
+    )
     vis_parser.add_argument("--start", type=int, default=0, help="経路を表示開始する番号")
+    vis_parser.add_argument("--end", type=int, help="経路を表示終了する番号")
     vis_parser.add_argument("--num", action="store_true", help="移動経路に番号を表示する")
     vis_parser.add_argument("--road", action="store_true", help="道路だけを地図に表示する")
     vis_parser.add_argument("--all", action="store_true", help="分割後のルートをすべて扱う")
+    vis_parser.add_argument("--step", type=int, default=10, help="表示する点の間隔")
     vis_parser.set_defaults(handler=visualize_route)
 
     # splitコマンドの動作
-    split_parser = subparsers.add_parser("split", parents=[parent_parser])
-    split_parser.add_argument("--with_seg", action="store_true")
+    split_parser = subparsers.add_parser(
+        "split", parents=[parent_parser], help="全体の歩行ルートから必要な部分を抽出する"
+    )
+    split_parser.add_argument(
+        "--with_seg", action="store_true", help="seg.hdf5も一緒に処理する"
+    )
     split_parser.set_defaults(handler=extract_routes)
 
     # gpxコマンドの動作
-    gpx_parser = subparsers.add_parser("gpx", parents=[parent_parser])
+    gpx_parser = subparsers.add_parser(
+        "gpx", parents=[parent_parser], help="gpxファイルを作成する"
+    )
     gpx_parser.set_defaults(handler=create_gpx_from_hdf5)
 
     args = parser.parse_args()
