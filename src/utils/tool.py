@@ -3,10 +3,14 @@ import math
 import random
 import subprocess
 from operator import itemgetter
-from scipy.spatial import voronoi_plot_2d
+from pprint import pprint
+
 import numpy as np
 import pyproj
+from scipy.spatial import voronoi_plot_2d
+
 from geometry.capture import HEIGHT, WIDTH
+from utils.color_output import output_with_color
 
 DEFAULT_ATTRIBUTES = (
     "index",
@@ -76,8 +80,8 @@ def array_to_3dim(array):
     return result
 
 
-# TRANSFORMER = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:30169")
-TRANSFORMER = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:6677")
+TRANSFORMER = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:30169")
+# TRANSFORMER = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:6677")
 
 
 def parse_x_y_from_gps(gpsdata):
@@ -150,3 +154,29 @@ def plot_voronoi_with_label(vor):
         fig.axes[0].text(vor.vertices[i, 0], vor.vertices[i, 1], f"{i}")
     fig.axes[0].set_aspect("equal")
     fig.show()
+
+
+def select_pcd_setting(site_path):
+    """点群の設定を選択してファイル名を返却する
+
+    Parameters
+    ----------
+    site_path : Path
+        敷地のptsフォルダ
+
+    Returns
+    -------
+    file_name : str
+        segmentation
+    """
+    output_with_color("select setting", "g")
+    # 点群設定の一覧を出力する
+    file_names = [i.name for i in site_path.glob("clustering_*.pts")]
+    tmp = list(zip(range(len(file_names)), file_names))
+    pprint(dict(tmp))
+
+    # 入力した数値を元に設定を選択する
+    file_name = file_names[int(input("select setting by index \n>"))]
+    print(f"selected : {file_name}")
+
+    return file_name

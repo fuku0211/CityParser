@@ -11,10 +11,11 @@
             "options": [
                 "20191112_142615_a",
                 "20191121_114900",
-                "20191211_125844",
+                "20191222_123249",
+                "20191223_013923",
+                "20191215_124740",
                 "20191212_123533",
                 "20191214_132857",
-                "20191215_124740"
             ]
         },
         {
@@ -24,10 +25,11 @@
             "options": [
                 "test",
                 "daizawa_4",
+                "kagurazaka",
                 "nezu_2",
+                "tsukishima_3",
                 "tsurumaki_5",
                 "ushikubo_1",
-                "tsukishima_3"
             ]
         }
     ],
@@ -82,21 +84,6 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "pointcloud create all",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceRoot}/src/pointcloud.py",
-            "args": [
-                "create",
-                "-s",
-                "${input:site}",
-                "-d",
-                "${input:date}",
-                "--all"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
             "name": "pointcloud cluster",
             "type": "python",
             "request": "launch",
@@ -104,9 +91,7 @@
             "args":[
                 "cluster",
                 "-s",
-                "${input:site}",
-                "-m",
-                "dbscan",
+                "${input:site}"
             ]
         },
         {
@@ -186,20 +171,7 @@
             ]
         },
         {
-            "name": "parse volume(one route)",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceRoot}/src/parse.py",
-            "args": [
-                "volume",
-                "-s",
-                "${input:site}",
-                "-d",
-                "${input:date}"
-            ]
-        },
-        {
-            "name": "parse volume(all route)",
+            "name": "parse volume",
             "type": "python",
             "request": "launch",
             "program": "${workspaceRoot}/src/parse.py",
