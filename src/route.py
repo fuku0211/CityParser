@@ -1,19 +1,18 @@
 import argparse
 import json
 from contextlib import ExitStack
-from operator import itemgetter
 from pathlib import Path
 
 import gpxpy.gpx
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
-from shapely.geometry import LineString, Polygon
-from tqdm import tqdm, trange
+from shapely.geometry import Polygon
+from tqdm import tqdm
 
 from geometry.shapes import ShapeFileCache
 from utils.color_output import output_with_color
-from utils.tool import parse_lat_lon_from_gps, parse_x_y_from_gps
+from gps.convert import parse_lat_lon_from_gps, parse_x_y_from_gps
 
 
 class Mapbbox:
@@ -198,7 +197,9 @@ def visualize_route(args):
                     route_coords_x.append(c_x)
                     route_coords_y.append(c_y)
                     if args.num:  # フレーム番号を表示する
-                        ax.text(c_x, c_y, str(f), fontsize=10)
+                        # ax.text(c_x, c_y, str(f), fontsize=10)
+                        ax.text(c_x, c_y, str(ht), fontsize=10)
+
             # 各点を描画
             ax.scatter(route_coords_x, route_coords_y, s=10, label=route, zorder=2)
 

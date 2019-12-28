@@ -77,9 +77,7 @@
             "args": [
                 "create",
                 "-s",
-                "${input:site}",
-                "-d",
-                "${input:date}",
+                "${input:site}"
             ],
             "console": "integratedTerminal"
         },
@@ -190,8 +188,17 @@
                 "voronoi",
                 "-s",
                 "${input:site}",
-                "-d",
-                "${input:date}"
+            ]
+        },
+        {
+            "name": "height",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/src/parse.py",
+            "args": [
+                "height",
+                "-s",
+                "${input:site}"
             ]
         }
     ]

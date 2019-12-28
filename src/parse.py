@@ -13,7 +13,8 @@ from tqdm import tqdm
 
 from geometry.shapes import Plant, ShapeFileCache, Site, plot_lands_in_site
 from utils.color_output import output_with_color
-from utils.tool import random_colors, select_pcd_setting
+from utils.tool import random_colors, select_cluster_setting
+from gps.convert import get_elevation_from_tile, convert_xy_to_latlon
 
 
 def _load_plants_from_pts(file_path):
@@ -23,7 +24,7 @@ def _load_plants_from_pts(file_path):
         lines = f.readlines()
     lines = lines[1:]  # ヘッドはスルー
 
-    output_with_color("loading file")
+    output_with_color("loading pcd")
     xyz = []  # 点群座標
     cluster_idx = []  # 各点がどのクラスタに属しているか示すインデックスのリスト
     for line in tqdm(lines):
@@ -55,7 +56,7 @@ def parse_plant_volumes_from_pcd(args):
         コマンドライン引数
     """
     site_path = Path("data", "pts", args.site)
-    file_name = select_pcd_setting(site_path)
+    file_name = select_cluster_setting(site_path, args.setting)
 
     file_path = site_path / Path(file_name)
     plants = _load_plants_from_pts(file_path)
@@ -65,14 +66,16 @@ def parse_plant_volumes_from_pcd(args):
     fig = plt.figure()
     ax1 = fig.add_subplot(1, 1, 1)
     # ax2 = fig.add_subplot(1, 2, 2)
-    ax1.hist(volumes, bins=100, range=(0, 150))
+    ax1.set_ylim([0, 200])
+    ax1.hist(volumes, bins=100, range=(0, 15))
     # ax2.hist(areas, bins=50, range=(0, 10))
     fig_dir = Path("data", "png", args.site)
     fig_dir.mkdir(parents=True, exist_ok=True)
     plt.savefig(
         fig_dir / Path("volume.png"), bbox_inches="tight", pad_inches=0,
     )
-    plt.show()
+    if args.show:
+        plt.show()
 
 
 def parse_voronoi(args):
@@ -82,7 +85,7 @@ def parse_voronoi(args):
     pts_dir = Path("data", "pts", args.site)
 
     # 植生のロード
-    file_name = select_pcd_setting(pts_dir)
+    file_name = select_cluster_setting(pts_dir, args.setting)
     plants = _load_plants_from_pts(pts_dir / Path(file_name))
     centroids = [Point(i.centroid[0], i.centroid[1]) for i in plants]
 
@@ -118,8 +121,44 @@ def parse_voronoi(args):
         bbox_inches="tight",
         pad_inches=0,
     )
-    plt.show()
+    if args.show:
+        plt.show()
 
+
+def parse_plants_height(args):
+    #shapeファイルとコンフィグの読み込み
+    shp_dir = Path("data", "shp", args.site)
+    json_dir = Path("data", "json", args.site)
+    pts_dir = Path("data", "pts", args.site)
+
+    # 植生のロード
+    file_name = select_cluster_setting(pts_dir, args.setting)
+    plants = _load_plants_from_pts(pts_dir / Path(file_name))
+
+    # 植生の重心の高さ - 標高
+    result = []
+    for plant in plants:
+        lat, lon = convert_xy_to_latlon(plant.centroid[0], plant.centroid[1])
+        height = plant.centroid[2] - get_elevation_from_tile(lat, lon)
+        result.append(height)
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.set_ylim([0, 300])
+    result = np.asarray(result)
+    ax.hist(result, bins=50)
+
+    fig_dir = Path("data", "png", args.site)
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    setting_str = str(Path(file_name).stem)
+    setting_str = "_".join(setting_str.split("_")[1:])
+    plt.savefig(
+        fig_dir / Path(f"height_{setting_str}_{args.site}.png"),
+        bbox_inches="tight",
+        pad_inches=0,
+    )
+
+    if args.show:
+        plt.show()
 
 if __name__ == "__main__":
     # コマンドライン用
@@ -128,15 +167,21 @@ if __name__ == "__main__":
 
     # 共通の引数
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument("-s", "--site", required=True)
+    parent_parser.add_argument("-s", "--site", required=True, help="対象敷地")
+    parent_parser.add_argument("--show", action="store_true")
+    parent_parser.add_argument("--setting", type=int, default=0)
 
     # 各コマンドの設定
     volume_parser = subparsers.add_parser("volume", parents=[parent_parser])
     volume_parser.set_defaults(handler=parse_plant_volumes_from_pcd)
 
     voronoi_parser = subparsers.add_parser("voronoi", parents=[parent_parser])
-    voronoi_parser.add_argument("-i", "--interval", default=1)
+    voronoi_parser.add_argument("-i", "--interval", type=float, default=1, help="ボロノイ分割の母点の間隔")
     voronoi_parser.set_defaults(handler=parse_voronoi)
+
+    height_parser = subparsers.add_parser("height", parents=[parent_parser])
+    height_parser.set_defaults(handler=parse_plants_height)
+
     args = parser.parse_args()
 
     if hasattr(args, "handler"):

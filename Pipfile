@@ -24,6 +24,9 @@ gpxpy = "*"
 termcolor = "*"
 flake8 = "*"
 black = "*"
+inputimeout = "*"
+urllib = "*"
+cprofilev = "*"
 
 [requires]
 python_version = "3.6"
