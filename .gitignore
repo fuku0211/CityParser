@@ -5,3 +5,4 @@ __pycache__/
 *.pts
 *.gpx
 src/test/binary/
+*.prof
