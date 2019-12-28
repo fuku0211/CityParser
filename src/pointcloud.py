@@ -2,26 +2,22 @@ import argparse
 import math
 from contextlib import ExitStack
 from pathlib import Path
-from time import time
+from pprint import pprint
 
 import h5py
 import numpy as np
 import open3d as o3d
-import pyproj
-from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer
-from pyclustering.cluster.dbscan import dbscan
-from tqdm import tqdm, trange
+from inputimeout import TimeoutOccurred, inputimeout
+from tqdm import tqdm
 
 from geometry.capture import CameraIntrinsic
+from utils.color_output import output_with_color
 from utils.tool import (
     array_to_3dim,
     calc_angle_between_axis,
-    parse_x_y_from_gps,
     random_colors,
 )
-from utils.color_output import output_with_color
-from pprint import pprint
-
+from gps.convert import parse_x_y_from_gps
 
 class Frame:
     """1フレームに関する情報を保持する.
@@ -292,7 +288,13 @@ def cluster_pcd(args):
     pprint(list(zip(range(len(file_names)), file_names)))
 
     # 入力した数値を元に設定を選択する
-    file_name = file_names[int(input("select setting by index >"))]
+    try:
+        file_name = file_names[
+            int(inputimeout(prompt="select setting by index >"), timeout=3)
+        ]
+    except TimeoutOccurred:
+        print("timeout")
+        file_name = file_names[args.setting]
     print(f"selected >{file_name}")
     coords = []
 
@@ -365,6 +367,7 @@ if __name__ == "__main__":
     clus_parser = subparsers.add_parser("cluster", parents=[parent_parser])
     clus_parser.add_argument("--radius", type=float, default=0.7)
     clus_parser.add_argument("--min_pts", type=int, default=150)
+    clus_parser.add_argument("--setting", type=int)
     clus_parser.set_defaults(handler=cluster_pcd)
 
     args = parser.parse_args()

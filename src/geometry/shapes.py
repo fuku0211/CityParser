@@ -112,7 +112,7 @@ class ShapeFileCache:
         gcodes_in_site = []
         for i, rcd in enumerate(rcds):
             if rcd["acode"] == str(self.acode) and rcd["ccode"] == str(self.ccode):
-                blocks_in_site.append(blocks[i].points)
+                blocks_in_site.append(np.asarray(blocks[i].points))
                 gcodes_in_site.append(rcd["gcode"])
         site = cascaded_union([Polygon(i) for i in blocks_in_site])
         self.site = np.asarray(site.exterior.coords)
@@ -235,7 +235,7 @@ class Site(MapObject):
 
     def run_voronoi_building_land(self, interval, black_list):
         output_with_color("voronoi tesselation")
-        for idx, block in enumerate(tqdm(self.blocks)):
+        for block in tqdm(self.blocks):
             # 建物のない街区はスキップ
             if len(block.buildings) == 0:
                 continue
@@ -256,6 +256,11 @@ class Site(MapObject):
             block_mother_pts = np.unique(block_mother_pts, axis=0)
 
             vor = Voronoi(block_mother_pts)
+            # if block.gcode == 6:
+            #     fig = voronoi_plot_2d(vor)
+            #     coll = PolyCollection([i.boundary for i in block.buildings], facecolor=(0,0,0,0.2))
+            #     fig.axes[0].add_collection(coll)
+            #     plt.show()
             voronois = []
             for reg_idx, region in enumerate(vor.regions):
                 # ボロノイが無効or無限遠に伸びる辺を持つ時

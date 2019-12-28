@@ -2,15 +2,14 @@ import colorsys
 import math
 import random
 import subprocess
-from operator import itemgetter
 from pprint import pprint
 
 import numpy as np
-import pyproj
 from scipy.spatial import voronoi_plot_2d
 
 from geometry.capture import HEIGHT, WIDTH
 from utils.color_output import output_with_color
+from inputimeout import inputimeout, TimeoutOccurred
 
 DEFAULT_ATTRIBUTES = (
     "index",
@@ -80,67 +79,6 @@ def array_to_3dim(array):
     return result
 
 
-TRANSFORMER = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:30169")
-# TRANSFORMER = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:6677")
-
-
-def parse_x_y_from_gps(gpsdata):
-    """gpsのデータを変換して取り出す
-
-    Args:
-        gpsdata (list[str]): dgpro-1rwで取得したgpsデータ
-
-    Returns:
-        tuple: (x座標, y座標, 方向, 高度)
-
-    Note:
-        座標は平面直角座標の投影された値
-        方向は北を0として右回りで計測した値
-    """
-    # TODO: 標高=楕円体高であってるかわからない
-    lat, lon, dire, ht = map(float, itemgetter(3, 5, 8, 33)(gpsdata))
-    # 欠損値に対する処理
-    if lat < 0 or lon < 0:
-        x, y = None, None
-    # dddmm.mmmm表記になっているのを(度数+分数/60)でddd.dddd表記にする
-    # http://lifelog.main.jp/wordpress/?p=146
-    else:
-        dd_lat, mm_lat = divmod(lat / 100, 1)
-        dd_lon, mm_lon = divmod(lon / 100, 1)
-        lat = dd_lat + mm_lat * 100 / 60
-        lon = dd_lon + mm_lon * 100 / 60
-        y, x = TRANSFORMER.transform(lat, lon)
-    return (x, y, dire, ht)
-
-
-def parse_lat_lon_from_gps(gpsdata):
-    """gpsのデータを変換して緯度と経度を取り出す
-
-    Args:
-        gpsdata (list[str]): dgpro-1rwで取得したgpsデータ
-
-    Returns:
-        緯度、軽度
-
-    Note:
-        座標は平面直角座標の投影された値
-        方向は北を0として右回りで計測した値
-    """
-    # TODO: 標高=楕円体高であってるかわからない
-    lat, lon, dire, ht = map(float, itemgetter(3, 5, 8, 33)(gpsdata))
-    # 欠損値に対する処理
-    if lat < 0 or lon < 0:
-        lat, lon = None, None
-    # dddmm.mmmm表記になっているのを(度数+分数/60)でddd.dddd表記にする
-    # http://lifelog.main.jp/wordpress/?p=146
-    else:
-        dd_lat, mm_lat = divmod(lat / 100, 1)
-        dd_lon, mm_lon = divmod(lon / 100, 1)
-        lat = dd_lat + mm_lat * 100 / 60
-        lon = dd_lon + mm_lon * 100 / 60
-    return lat, lon
-
-
 def get_key_from_value(d, val):
     keys = [k for k, v in d.items() if set(v) == set(val)]
     return keys
@@ -156,7 +94,7 @@ def plot_voronoi_with_label(vor):
     fig.show()
 
 
-def select_pcd_setting(site_path):
+def select_cluster_setting(site_path, instead):
     """点群の設定を選択してファイル名を返却する
 
     Parameters
@@ -176,7 +114,10 @@ def select_pcd_setting(site_path):
     pprint(dict(tmp))
 
     # 入力した数値を元に設定を選択する
-    file_name = file_names[int(input("select setting by index \n>"))]
+    try:
+        file_name = file_names[int(inputimeout(prompt="select setting by index \n>", timeout=3))]
+    except TimeoutOccurred:
+        print("timeout")
+        file_name = file_names[instead]
     print(f"selected : {file_name}")
-
     return file_name
